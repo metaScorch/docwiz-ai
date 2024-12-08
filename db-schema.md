@@ -260,5 +260,83 @@
     "constraint_type": null,
     "foreign_table_name": null,
     "foreign_column_name": null
+  },
+  {
+    "table_name": "templates",
+    "column_name": "id",
+    "ordinal_position": 1,
+    "is_nullable": "NO",
+    "data_type": "uuid",
+    "character_maximum_length": null,
+    "numeric_precision": null,
+    "numeric_scale": null,
+    "constraint_type": "PRIMARY KEY",
+    "foreign_table_name": "templates",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_name": "templates",
+    "column_name": "created_at",
+    "ordinal_position": 2,
+    "is_nullable": "NO",
+    "data_type": "timestamp with time zone",
+    "character_maximum_length": null,
+    "numeric_precision": null,
+    "numeric_scale": null,
+    "constraint_type": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "templates",
+    "column_name": "template_name",
+    "ordinal_position": 3,
+    "is_nullable": "YES",
+    "data_type": "text",
+    "character_maximum_length": null,
+    "numeric_precision": null,
+    "numeric_scale": null,
+    "constraint_type": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "templates",
+    "column_name": "content",
+    "ordinal_position": 4,
+    "is_nullable": "YES",
+    "data_type": "text",
+    "character_maximum_length": null,
+    "numeric_precision": null,
+    "numeric_scale": null,
+    "constraint_type": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "templates",
+    "column_name": "ideal_for",
+    "ordinal_position": 5,
+    "is_nullable": "YES",
+    "data_type": "text",
+    "character_maximum_length": null,
+    "numeric_precision": null,
+    "numeric_scale": null,
+    "constraint_type": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "templates",
+    "column_name": "description",
+    "ordinal_position": 6,
+    "is_nullable": "YES",
+    "data_type": "text",
+    "character_maximum_length": null,
+    "numeric_precision": null,
+    "numeric_scale": null,
+    "constraint_type": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
   }
 ]

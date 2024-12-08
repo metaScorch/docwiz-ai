@@ -2,23 +2,59 @@
 
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { useEffect, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+  SheetClose,
+} from "@/components/ui/sheet";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { NewAgreementForm } from "@/components/NewAgreementForm";
+import { Input } from "@/components/ui/input";
+import { useRouter } from "next/navigation";
 
 export default function DashboardPage() {
+  const router = useRouter();
   const supabase = createClientComponentClient();
   const [registrations, setRegistrations] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [stats, setStats] = useState({
+    totalDocuments: 0,
+    signedDocuments: 0,
+    totalParties: 0,
+  });
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [templates, setTemplates] = useState([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+
+  const filteredRegistrations = registrations.filter((doc) =>
+    Object.values(doc).some(
+      (value) =>
+        value &&
+        value.toString().toLowerCase().includes(searchQuery.toLowerCase())
+    )
+  );
 
   useEffect(() => {
-    async function fetchRegistrations() {
+    async function fetchData() {
       try {
         const {
           data: { user },
         } = await supabase.auth.getUser();
-
-        if (!user) {
-          // Handle not authenticated state
-          return;
-        }
+        if (!user) return;
 
         const { data, error } = await supabase
           .from("registrations")
@@ -28,15 +64,66 @@ export default function DashboardPage() {
 
         if (error) throw error;
         setRegistrations(data || []);
+
+        // Calculate stats (modify according to your actual data structure)
+        setStats({
+          totalDocuments: data.length,
+          signedDocuments: data.filter((doc) => doc.status === "signed").length,
+          totalParties: data.reduce(
+            (acc, doc) => acc + (doc.parties?.length || 0),
+            0
+          ),
+        });
       } catch (error) {
-        console.error("Error fetching registrations:", error);
+        console.error("Error fetching data:", error);
       } finally {
         setLoading(false);
       }
     }
 
-    fetchRegistrations();
+    fetchData();
   }, []);
+
+  // Add debounced search function
+  const searchTemplates = async (query) => {
+    if (query.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const { data, error } = await supabase
+        .from('templates')
+        .select('id, template_name, description')
+        .ilike('template_name', `%${query}%`)
+        .limit(5);
+
+      if (error) throw error;
+      setSearchResults(data || []);
+    } catch (error) {
+      console.error('Error searching templates:', error);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const fetchTemplates = async () => {
+    setLoadingTemplates(true);
+    try {
+      const { data, error } = await supabase
+        .from('templates')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setTemplates(data || []);
+    } catch (error) {
+      console.error('Error fetching templates:', error);
+    } finally {
+      setLoadingTemplates(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -47,38 +134,167 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="container mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-4">Your Registrations</h1>
+    <div className="container mx-auto p-6 space-y-6">
+      <div className="relative w-full max-w-sm">
+        <Input
+          type="text"
+          placeholder="Search templates, documents.."
+          value={searchQuery}
+          onChange={(e) => {
+            setSearchQuery(e.target.value);
+            searchTemplates(e.target.value);
+          }}
+        />
+        
+        {/* Search Results Dropdown */}
+        {searchResults.length > 0 && (
+          <div className="absolute w-full mt-1 bg-white rounded-md shadow-lg border z-50">
+            {searchResults.map((template) => (
+              <div
+                key={template.id}
+                className="p-2 hover:bg-gray-100 cursor-pointer"
+                onClick={() => router.push(`/editor/${template.id}`)}
+              >
+                <div className="font-medium">{template.template_name}</div>
+                <div className="text-sm text-gray-500">{template.description}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
-      {registrations.length === 0 ? (
-        <p className="text-gray-500">No registrations found.</p>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {registrations.map((registration) => (
-            <div
-              key={registration.id}
-              className="p-4 border rounded-lg shadow hover:shadow-md transition-shadow"
-            >
-              <h2 className="font-semibold text-lg">
-                {registration.entity_name}
-              </h2>
-              <p className="text-sm text-gray-600">
-                Type: {registration.registration_type}
-              </p>
-              <p className="text-sm text-gray-600">
-                Location: {registration.country_name}
-                {registration.state_name && `, ${registration.state_name}`}
-                {registration.city_name && `, ${registration.city_name}`}
-              </p>
-              <p className="text-sm text-gray-600 mt-2">
-                Created:{" "}
-                {new Date(registration.created_at).toLocaleDateString()}
-              </p>
-              {/* Add more registration details as needed */}
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Stats Section */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              Total Documents
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.totalDocuments}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              Signed Documents
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.signedDocuments}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Parties</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.totalParties}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="flex space-x-4">
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button>Generate New Agreement</Button>
+          </SheetTrigger>
+          <SheetContent className="sm:max-w-[425px]">
+            <SheetHeader>
+              <SheetTitle>Create New Agreement</SheetTitle>
+            </SheetHeader>
+            <NewAgreementForm />
+          </SheetContent>
+        </Sheet>
+
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button variant="secondary" onClick={fetchTemplates}>
+              Select Template
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="right" className="sm:max-w-[600px] overflow-y-auto">
+            <SheetHeader>
+              <SheetTitle>Select a Template</SheetTitle>
+            </SheetHeader>
+            {loadingTemplates ? (
+              <div className="flex items-center justify-center py-8">
+                Loading templates...
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Template Name</TableHead>
+                    <TableHead>Ideal For</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {templates.map((template) => (
+                    <TableRow key={template.id}>
+                      <TableCell className="font-medium">
+                        {template.template_name}
+                      </TableCell>
+                      <TableCell>{template.ideal_for}</TableCell>
+                      <TableCell className="max-w-[200px] truncate">
+                        {template.description}
+                      </TableCell>
+                      <TableCell>
+                        <SheetClose asChild>
+                          <Button
+                            size="sm"
+                            onClick={() => router.push(`/editor/${template.id}`)}
+                          >
+                            Select
+                          </Button>
+                        </SheetClose>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </SheetContent>
+        </Sheet>
+      </div>
+
+      {/* Documents Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent Documents</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Parties</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Date</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredRegistrations.map((doc) => (
+                <TableRow key={doc.id}>
+                  <TableCell className="font-medium">
+                    {doc.entity_name}
+                  </TableCell>
+                  <TableCell>{doc.registration_type}</TableCell>
+                  <TableCell>{doc.parties?.join(", ") || "N/A"}</TableCell>
+                  <TableCell>{doc.status || "Pending"}</TableCell>
+                  <TableCell>
+                    {new Date(doc.created_at).toLocaleString()}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </div>
   );
 }

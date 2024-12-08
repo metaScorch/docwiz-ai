@@ -67,3 +67,55 @@
     @apply bg-background text-foreground;
   }
 }
+
+.ProseMirror p.is-editor-empty:first-child::before {
+  color: #adb5bd;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.ProseMirror {
+  > * + * {
+    margin-top: 0.75em;
+  }
+}
+
+/* Add syntax highlighting styles */
+pre {
+  background: #0d1117;
+  padding: 1rem;
+  border-radius: 0.5rem;
+}
+
+code {
+  color: #c9d1d9;
+}
+
+.hljs-comment,
+.hljs-quote {
+  color: #8b949e;
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag {
+  color: #ff7b72;
+}
+
+.hljs-string,
+.hljs-attr {
+  color: #a5d6ff;
+}
+
+.hljs-number,
+.hljs-literal {
+  color: #79c0ff;
+}
+
+.hljs-title,
+.hljs-class,
+.hljs-type {
+  color: #d2a8ff;
+}
