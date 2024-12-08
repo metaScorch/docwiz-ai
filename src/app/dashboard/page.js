@@ -5,13 +5,12 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-  SheetClose,
-} from "@/components/ui/sheet";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -23,6 +22,13 @@ import {
 import { NewAgreementForm } from "@/components/NewAgreementForm";
 import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -39,6 +45,7 @@ export default function DashboardPage() {
   const [isSearching, setIsSearching] = useState(false);
   const [templates, setTemplates] = useState([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [templateSearchQuery, setTemplateSearchQuery] = useState("");
 
   const filteredRegistrations = registrations.filter((doc) =>
     Object.values(doc).some(
@@ -94,15 +101,15 @@ export default function DashboardPage() {
     setIsSearching(true);
     try {
       const { data, error } = await supabase
-        .from('templates')
-        .select('id, template_name, description')
-        .ilike('template_name', `%${query}%`)
+        .from("templates")
+        .select("id, template_name, description")
+        .ilike("template_name", `%${query}%`)
         .limit(5);
 
       if (error) throw error;
       setSearchResults(data || []);
     } catch (error) {
-      console.error('Error searching templates:', error);
+      console.error("Error searching templates:", error);
     } finally {
       setIsSearching(false);
     }
@@ -112,18 +119,29 @@ export default function DashboardPage() {
     setLoadingTemplates(true);
     try {
       const { data, error } = await supabase
-        .from('templates')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .from("templates")
+        .select("*")
+        .order("created_at", { ascending: false });
 
       if (error) throw error;
       setTemplates(data || []);
     } catch (error) {
-      console.error('Error fetching templates:', error);
+      console.error("Error fetching templates:", error);
     } finally {
       setLoadingTemplates(false);
     }
   };
+
+  // Filter templates based on search
+  const filteredTemplates = templates.filter((template) =>
+    Object.values({
+      template_name: template.template_name,
+      ideal_for: template.ideal_for,
+      description: template.description,
+    }).some((value) =>
+      value?.toLowerCase().includes(templateSearchQuery.toLowerCase())
+    )
+  );
 
   if (loading) {
     return (
@@ -145,7 +163,7 @@ export default function DashboardPage() {
             searchTemplates(e.target.value);
           }}
         />
-        
+
         {/* Search Results Dropdown */}
         {searchResults.length > 0 && (
           <div className="absolute w-full mt-1 bg-white rounded-md shadow-lg border z-50">
@@ -156,7 +174,9 @@ export default function DashboardPage() {
                 onClick={() => router.push(`/editor/${template.id}`)}
               >
                 <div className="font-medium">{template.template_name}</div>
-                <div className="text-sm text-gray-500">{template.description}</div>
+                <div className="text-sm text-gray-500">
+                  {template.description}
+                </div>
               </div>
             ))}
           </div>
@@ -208,57 +228,72 @@ export default function DashboardPage() {
           </SheetContent>
         </Sheet>
 
-        <Sheet>
-          <SheetTrigger asChild>
+        <Dialog>
+          <DialogTrigger asChild>
             <Button variant="secondary" onClick={fetchTemplates}>
               Select Template
             </Button>
-          </SheetTrigger>
-          <SheetContent side="right" className="sm:max-w-[600px] overflow-y-auto">
-            <SheetHeader>
-              <SheetTitle>Select a Template</SheetTitle>
-            </SheetHeader>
+          </DialogTrigger>
+          <DialogContent className="max-w-[900px] max-h-[80vh]">
+            <DialogHeader>
+              <DialogTitle className="text-xl mb-4">
+                Select a Template
+              </DialogTitle>
+              <div className="mb-4">
+                <Input
+                  type="text"
+                  placeholder="Search templates..."
+                  value={templateSearchQuery}
+                  onChange={(e) => setTemplateSearchQuery(e.target.value)}
+                  className="max-w-sm"
+                />
+              </div>
+            </DialogHeader>
             {loadingTemplates ? (
               <div className="flex items-center justify-center py-8">
                 Loading templates...
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Template Name</TableHead>
-                    <TableHead>Ideal For</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {templates.map((template) => (
-                    <TableRow key={template.id}>
-                      <TableCell className="font-medium">
-                        {template.template_name}
-                      </TableCell>
-                      <TableCell>{template.ideal_for}</TableCell>
-                      <TableCell className="max-w-[200px] truncate">
-                        {template.description}
-                      </TableCell>
-                      <TableCell>
-                        <SheetClose asChild>
+              <div className="overflow-y-auto max-h-[60vh]">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[200px]">Template Name</TableHead>
+                      <TableHead className="w-[150px]">Ideal For</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead className="w-[100px]"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredTemplates.map((template) => (
+                      <TableRow key={template.id}>
+                        <TableCell className="font-medium">
+                          {template.template_name}
+                        </TableCell>
+                        <TableCell>{template.ideal_for}</TableCell>
+                        <TableCell>
+                          <div className="max-h-[100px] overflow-y-auto pr-4">
+                            {template.description}
+                          </div>
+                        </TableCell>
+                        <TableCell>
                           <Button
                             size="sm"
-                            onClick={() => router.push(`/editor/${template.id}`)}
+                            onClick={() =>
+                              router.push(`/editor/${template.id}`)
+                            }
                           >
                             Select
                           </Button>
-                        </SheetClose>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
-          </SheetContent>
-        </Sheet>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Documents Table */}
