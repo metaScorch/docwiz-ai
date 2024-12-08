@@ -15,6 +15,7 @@ import { Info } from "lucide-react";
 import { Country, State, City } from "country-state-city";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { useRouter } from "next/navigation";
+import { toast } from "react-hot-toast";
 
 const registrationTypes = [
   "LLC",
@@ -80,6 +81,17 @@ export default function EntityDetailsStep({ onNext, registrationId }) {
 
       if (error) throw error;
 
+      // Check email verification status
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user?.email_confirmed_at) {
+        // If email is not verified, redirect to verify email page
+        router.push("/verify-email");
+      } else {
+        // If email is verified, proceed to dashboard
+        router.push("/dashboard");
+      }
+
       onNext({
         entityName,
         registrationType,
@@ -92,10 +104,9 @@ export default function EntityDetailsStep({ onNext, registrationId }) {
         signatoryEmail,
       });
 
-      router.push("/dashboard");
     } catch (error) {
       console.error("Error updating registration:", error);
-      // You might want to add error handling UI here
+      toast.error("Failed to update registration details");
     }
   };
 
