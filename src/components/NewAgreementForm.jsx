@@ -1,61 +1,42 @@
-"use client";
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { useRouter } from "next/navigation";
+import { Wand2 } from "lucide-react"; // Import the magic wand icon
 
 export function NewAgreementForm() {
-  const [formData, setFormData] = useState({
-    type: "",
-    name: "",
-    description: "",
-  });
+  const router = useRouter();
+  const [prompt, setPrompt] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
     // Add your form submission logic here
-    console.log(formData);
+    setLoading(false);
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
-        <label className="text-sm font-medium">Agreement Type</label>
-        <Select
-          value={formData.type}
-          onValueChange={(value) => setFormData({ ...formData, type: value })}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select type" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="nda">Non-Disclosure Agreement</SelectItem>
-            <SelectItem value="employment">Employment Contract</SelectItem>
-            <SelectItem value="service">Service Agreement</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Name</label>
-        <Input
-          value={formData.name}
-          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-          placeholder="Agreement name"
+        <div className="flex items-center gap-2 mb-2">
+          <Wand2 className="h-4 w-4" />
+          <span className="text-sm text-muted-foreground">AI-Powered Generation</span>
+        </div>
+        <Textarea
+          placeholder="Explain what agreement you need and for what purpose...
+Example: I need a non-disclosure agreement for a freelance developer who will be working on my startup"
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          className="min-h-[120px]"
         />
+        <p className="text-sm text-muted-foreground">
+          Tip: Check our templates first to save time - we have many common agreements ready to use.
+        </p>
       </div>
-
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Description</label>
-        <Input
-          value={formData.description}
-          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-          placeholder="Brief description"
-        />
-      </div>
-
-      <Button type="submit" className="w-full">Create Agreement</Button>
+      <Button type="submit" className="w-full" disabled={loading}>
+        {loading ? "Generating..." : "Generate Agreement"}
+      </Button>
     </form>
   );
 }

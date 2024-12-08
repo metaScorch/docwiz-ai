@@ -22,13 +22,6 @@ import {
 import { NewAgreementForm } from "@/components/NewAgreementForm";
 import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -216,17 +209,17 @@ export default function DashboardPage() {
       </div>
 
       <div className="flex space-x-4">
-        <Sheet>
-          <SheetTrigger asChild>
+        <Dialog>
+          <DialogTrigger asChild>
             <Button>Generate New Agreement</Button>
-          </SheetTrigger>
-          <SheetContent className="sm:max-w-[425px]">
-            <SheetHeader>
-              <SheetTitle>Create New Agreement</SheetTitle>
-            </SheetHeader>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Create New Agreement</DialogTitle>
+            </DialogHeader>
             <NewAgreementForm />
-          </SheetContent>
-        </Sheet>
+          </DialogContent>
+        </Dialog>
 
         <Dialog>
           <DialogTrigger asChild>
