@@ -18,6 +18,7 @@ import "../styles/editor.css";
 import SuggestionPopup from "./SuggestionPopup";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import ChangePreview from "./ChangePreview";
+import { Wand2 } from "lucide-react";
 
 // Create a new lowlight instance with common languages
 const lowlight = createLowlight(common);
@@ -60,7 +61,7 @@ const CustomPlaceholder = Extension.create({
   },
 });
 
-export default function Editor({ content, onChange, documentId }) {
+export default function Editor({ content, onChange, documentId, onImproveFormatting }) {
   const [isMounted, setIsMounted] = useState(false);
   const [documentValues, setDocumentValues] = useState({});
   const [selection, setSelection] = useState(null);
@@ -296,6 +297,24 @@ export default function Editor({ content, onChange, documentId }) {
     setSelection(null);
   };
 
+  const handleImproveFormatting = async () => {
+    if (!editor) return;
+    
+    try {
+      const currentContent = editor.storage.markdown.getMarkdown();
+      
+      // Call the parent's onImproveFormatting handler
+      if (onImproveFormatting) {
+        const formattedContent = await onImproveFormatting(currentContent);
+        if (formattedContent) {
+          editor.commands.setContent(formattedContent, true);
+        }
+      }
+    } catch (error) {
+      console.error("Error improving formatting:", error);
+    }
+  };
+
   if (!isMounted) {
     return (
       <div className="min-h-[calc(100vh-200px)] p-4 border rounded-lg">
@@ -307,7 +326,7 @@ export default function Editor({ content, onChange, documentId }) {
   return (
     <div className="max-w-none flex relative">
       <div className="flex-1 border rounded-lg">
-        <MenuBar editor={editor} />
+        <MenuBar editor={editor} onImproveFormatting={handleImproveFormatting} />
         <EditorContent
           editor={editor}
           className="min-h-[calc(100vh-200px)] p-4"

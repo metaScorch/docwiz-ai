@@ -1,4 +1,6 @@
-export default function MenuBar({ editor }) {
+import { Wand2 } from "lucide-react";
+
+export default function MenuBar({ editor, onImproveFormatting }) {
   if (!editor) {
     return null;
   }
@@ -80,6 +82,14 @@ export default function MenuBar({ editor }) {
         }`}
       >
         Ordered List
+      </button>
+      <button
+        onClick={onImproveFormatting}
+        className="p-2 rounded hover:bg-gray-100 text-orange-500 hover:text-orange-600 flex items-center gap-1"
+        title="Improve Formatting"
+      >
+        <Wand2 className="w-5 h-5" />
+        <span>Auto Format AI</span>
       </button>
     </div>
   );

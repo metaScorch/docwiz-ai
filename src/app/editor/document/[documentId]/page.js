@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import Editor from "@/components/Editor";
 import { formatDistanceToNow } from "date-fns";
 import { use } from "react";
+import LoadingModal from "@/components/LoadingModal";
 
 export default function EditorPage({ params }) {
   const resolvedParams = use(params);
@@ -17,6 +18,7 @@ export default function EditorPage({ params }) {
   const [content, setContent] = useState("");
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [, setForceUpdate] = useState(0);
+  const [isFormatting, setIsFormatting] = useState(false);
 
   const formatRelativeTime = (dateString) => {
     return formatDistanceToNow(new Date(dateString), { addSuffix: true });
@@ -63,7 +65,7 @@ export default function EditorPage({ params }) {
 
   useEffect(() => {
     const intervalId = setInterval(() => {
-      setForceUpdate(prev => prev + 1);
+      setForceUpdate((prev) => prev + 1);
     }, 60000);
 
     return () => clearInterval(intervalId);
@@ -112,6 +114,36 @@ export default function EditorPage({ params }) {
       updated_at: newTimestamp,
     }));
     setIsEditingTitle(false);
+  };
+
+  const handleImproveFormatting = async (currentContent) => {
+    setIsFormatting(true);
+    try {
+      const response = await fetch("/api/improve-formatting", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          content: currentContent,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.error) throw new Error(data.error);
+
+      return data.formattedContent;
+    } catch (error) {
+      console.error("Error improving formatting:", error);
+      return null;
+    } finally {
+      setIsFormatting(false);
+    }
+  };
+
+  const handleCancelFormatting = () => {
+    setIsFormatting(false);
   };
 
   if (!userDocument) {
@@ -166,7 +198,10 @@ export default function EditorPage({ params }) {
         content={content}
         onChange={handleContentChange}
         documentId={documentId}
+        onImproveFormatting={handleImproveFormatting}
       />
+
+      <LoadingModal isOpen={isFormatting} onCancel={handleCancelFormatting} />
     </div>
   );
 }
