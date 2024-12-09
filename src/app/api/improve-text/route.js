@@ -10,11 +10,12 @@ export async function POST(req) {
     const { selectedText, fullDocument, prompt } = await req.json();
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-4o",
       messages: [
         {
           role: "system",
-          content: "You are an expert in improving legal documents while maintaining their legal validity and professional tone."
+          content:
+            "You are an expert in improving legal documents while maintaining their legal validity and professional tone.",
         },
         {
           role: "user",
@@ -29,13 +30,13 @@ ${fullDocument}
 
 Please improve this section based on this request: ${prompt}
 
-Return only the improved section, maintaining proper formatting and ensuring it fits seamlessly into the document.`
-        }
-      ]
+Return only the improved section, maintaining proper formatting and ensuring it fits seamlessly into the document.`,
+        },
+      ],
     });
 
     return NextResponse.json({
-      improvedText: completion.choices[0].message.content.trim()
+      improvedText: completion.choices[0].message.content.trim(),
     });
   } catch (error) {
     console.error("Error improving text:", error);
