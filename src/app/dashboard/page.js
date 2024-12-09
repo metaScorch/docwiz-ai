@@ -22,33 +22,29 @@ import {
 import { NewAgreementForm } from "@/components/NewAgreementForm";
 import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
-import { formatDistanceToNow, isToday, isYesterday, format, isThisWeek, isThisYear } from 'date-fns';
+import {
+  formatDistanceToNow,
+  isToday,
+  isYesterday,
+  format,
+  isThisWeek,
+  isThisYear,
+} from "date-fns";
 
 export default function DashboardPage() {
   const router = useRouter();
   const supabase = createClientComponentClient();
   const [registrations, setRegistrations] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
   const [stats, setStats] = useState({
     totalDocuments: 0,
     signedDocuments: 0,
     totalParties: 0,
   });
-  const [searchResults, setSearchResults] = useState([]);
-  const [isSearching, setIsSearching] = useState(false);
   const [templates, setTemplates] = useState([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [templateSearchQuery, setTemplateSearchQuery] = useState("");
   const [userDocuments, setUserDocuments] = useState([]);
-
-  const filteredRegistrations = registrations.filter((doc) =>
-    Object.values(doc).some(
-      (value) =>
-        value &&
-        value.toString().toLowerCase().includes(searchQuery.toLowerCase())
-    )
-  );
 
   useEffect(() => {
     async function fetchData() {
@@ -59,11 +55,12 @@ export default function DashboardPage() {
         if (!user) return;
 
         // Fetch registrations
-        const { data: registrationsData, error: registrationsError } = await supabase
-          .from("registrations")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false });
+        const { data: registrationsData, error: registrationsError } =
+          await supabase
+            .from("registrations")
+            .select("*")
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: false });
 
         if (registrationsError) throw registrationsError;
         setRegistrations(registrationsData || []);
@@ -71,10 +68,12 @@ export default function DashboardPage() {
         // Fetch user documents
         const { data: documentsData, error: documentsError } = await supabase
           .from("user_documents")
-          .select(`
+          .select(
+            `
             *,
             template:templates(template_name)
-          `)
+          `
+          )
           .eq("user_id", user.id)
           .order("created_at", { ascending: false });
 
@@ -84,7 +83,9 @@ export default function DashboardPage() {
         // Calculate stats
         setStats({
           totalDocuments: (documentsData || []).length,
-          signedDocuments: (documentsData || []).filter(doc => doc.status === "signed").length,
+          signedDocuments: (documentsData || []).filter(
+            (doc) => doc.status === "signed"
+          ).length,
           totalParties: registrationsData.reduce(
             (acc, doc) => acc + (doc.parties?.length || 0),
             0
@@ -99,30 +100,6 @@ export default function DashboardPage() {
 
     fetchData();
   }, []);
-
-  // Add debounced search function
-  const searchTemplates = async (query) => {
-    if (query.length < 2) {
-      setSearchResults([]);
-      return;
-    }
-
-    setIsSearching(true);
-    try {
-      const { data, error } = await supabase
-        .from("templates")
-        .select("id, template_name, description")
-        .ilike("template_name", `%${query}%`)
-        .limit(5);
-
-      if (error) throw error;
-      setSearchResults(data || []);
-    } catch (error) {
-      console.error("Error searching templates:", error);
-    } finally {
-      setIsSearching(false);
-    }
-  };
 
   const fetchTemplates = async () => {
     setLoadingTemplates(true);
@@ -156,27 +133,29 @@ export default function DashboardPage() {
   function formatRelativeTime(dateStr) {
     try {
       const date = new Date(dateStr);
-      
+
       if (isToday(date)) {
         const distance = formatDistanceToNow(date, { addSuffix: false });
-        return distance === 'less than a minute' ? 'just now' : `${distance} ago`;
+        return distance === "less than a minute"
+          ? "just now"
+          : `${distance} ago`;
       }
-      
+
       if (isYesterday(date)) {
-        return 'yesterday';
+        return "yesterday";
       }
-      
+
       if (isThisWeek(date)) {
         return formatDistanceToNow(date, { addSuffix: true });
       }
-      
+
       if (isThisYear(date)) {
-        return format(date, 'MMM d');
+        return format(date, "MMM d");
       }
-      
-      return format(date, 'MMM d, yyyy');
+
+      return format(date, "MMM d, yyyy");
     } catch (error) {
-      return 'Invalid date';
+      return "Invalid date";
     }
   }
 
@@ -190,58 +169,6 @@ export default function DashboardPage() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      <div className="relative w-full max-w-sm">
-        <Input
-          type="text"
-          placeholder="Search templates, documents.."
-          value={searchQuery}
-          onChange={(e) => {
-            setSearchQuery(e.target.value);
-            searchTemplates(e.target.value);
-          }}
-        />
-
-        {/* Search Results Dropdown */}
-        {searchResults.length > 0 && (
-          <div className="absolute w-full mt-1 bg-white rounded-md shadow-lg border z-50">
-            {searchResults.map((template) => (
-              <div
-                key={template.id}
-                className="p-2 hover:bg-gray-100 cursor-pointer"
-                onClick={async () => {
-                  try {
-                    const { data: { user } } = await supabase.auth.getUser();
-                    if (!user) throw new Error('Not authenticated');
-
-                    const { data: newDocument, error } = await supabase
-                      .from('user_documents')
-                      .insert([{
-                        user_id: user.id,
-                        template_id: template.id,
-                        content: template.content,
-                        title: template.template_name,
-                        status: 'draft'
-                      }])
-                      .select()
-                      .single();
-
-                    if (error) throw error;
-                    router.push(`/editor/document/${newDocument.id}`);
-                  } catch (error) {
-                    console.error('Error creating document:', error);
-                  }
-                }}
-              >
-                <div className="font-medium">{template.template_name}</div>
-                <div className="text-sm text-gray-500">
-                  {template.description}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
       {/* Stats Section */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
@@ -341,28 +268,38 @@ export default function DashboardPage() {
                             onClick={async () => {
                               try {
                                 // Get current user
-                                const { data: { user } } = await supabase.auth.getUser();
-                                if (!user) throw new Error('Not authenticated');
+                                const {
+                                  data: { user },
+                                } = await supabase.auth.getUser();
+                                if (!user) throw new Error("Not authenticated");
 
                                 // Create new user document from template
-                                const { data: newDocument, error } = await supabase
-                                  .from('user_documents')
-                                  .insert([{
-                                    user_id: user.id,
-                                    template_id: template.id,
-                                    content: template.content,
-                                    title: template.template_name,
-                                    status: 'draft'
-                                  }])
-                                  .select()
-                                  .single();
+                                const { data: newDocument, error } =
+                                  await supabase
+                                    .from("user_documents")
+                                    .insert([
+                                      {
+                                        user_id: user.id,
+                                        template_id: template.id,
+                                        content: template.content,
+                                        title: template.template_name,
+                                        status: "draft",
+                                      },
+                                    ])
+                                    .select()
+                                    .single();
 
                                 if (error) throw error;
 
                                 // Redirect to editor with new document ID
-                                router.push(`/editor/document/${newDocument.id}`);
+                                router.push(
+                                  `/editor/document/${newDocument.id}`
+                                );
                               } catch (error) {
-                                console.error('Error creating document:', error);
+                                console.error(
+                                  "Error creating document:",
+                                  error
+                                );
                                 // Add error handling/notification here
                               }
                             }}
@@ -400,20 +337,20 @@ export default function DashboardPage() {
             <TableBody>
               {userDocuments.map((doc) => (
                 <TableRow key={doc.id}>
-                  <TableCell className="font-medium">
-                    {doc.title}
+                  <TableCell className="font-medium">{doc.title}</TableCell>
+                  <TableCell>
+                    {doc.template?.template_name || "Custom Document"}
                   </TableCell>
                   <TableCell>
-                    {doc.template?.template_name || 'Custom Document'}
-                  </TableCell>
-                  <TableCell>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      doc.status === 'draft' 
-                        ? 'bg-yellow-100 text-yellow-800'
-                        : doc.status === 'signed'
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-gray-100 text-gray-800'
-                    }`}>
+                    <span
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        doc.status === "draft"
+                          ? "bg-yellow-100 text-yellow-800"
+                          : doc.status === "signed"
+                            ? "bg-green-100 text-green-800"
+                            : "bg-gray-100 text-gray-800"
+                      }`}
+                    >
                       {doc.status || "draft"}
                     </span>
                   </TableCell>
@@ -444,8 +381,12 @@ export default function DashboardPage() {
               ))}
               {userDocuments.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground">
-                    No documents found. Create one by selecting a template or generating a new agreement.
+                  <TableCell
+                    colSpan={6}
+                    className="text-center text-muted-foreground"
+                  >
+                    No documents found. Create one by selecting a template or
+                    generating a new agreement.
                   </TableCell>
                 </TableRow>
               )}

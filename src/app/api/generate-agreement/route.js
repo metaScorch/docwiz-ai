@@ -20,43 +20,32 @@ const supabase = createClient(
 
 export async function POST(req) {
   try {
-    const { prompt, userId } = await req.json();
+    const { prompt, userId, jurisdiction } = await req.json();
 
-    // Debug log to check userId
-    console.log("Received userId:", userId);
-
-    if (!userId) {
+    if (!userId || !jurisdiction) {
       return NextResponse.json(
-        { error: "User ID is required" },
-        { status: 400 }
-      );
-    }
-
-    // Add debugging logs
-    console.log("Attempting to insert with userId:", userId);
-
-    // Verify userId format and auth
-    const { data: authData, error: authError } = await supabase.auth.getUser();
-    console.log("Current auth user:", authData?.user?.id);
-
-    if (!prompt || typeof prompt !== "string") {
-      return NextResponse.json(
-        { error: "Invalid or missing prompt" },
+        { error: "User ID and jurisdiction are required" },
         { status: 400 }
       );
     }
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-4",
       messages: [
         {
           role: "system",
-          content:
-            'You are a legal document generator. You must respond with valid JSON only. Your response must be a single JSON object with exactly these fields: "title" (string), "description" (string), "content" (string), and "isLegal" (boolean). For illegal requests, set isLegal to false. Example response format: {"title":"Document Title","description":"Brief description","content":"Markdown content with [PLACEHOLDERS]","isLegal":true}, The output must be in MD format and elaborate as much as possible, do not try to be concise.',
+          content: `You are a legal document generator. You must respond with valid JSON only. Your response must be a single JSON object with exactly these fields: "title" (string), "description" (string), "content" (string), and "isLegal" (boolean). The "content" field must include detailed Markdown content with appropriate placeholders denoted by [PLACEHOLDERS]. For illegal requests or requests that don't comply with ${jurisdiction} laws, set "isLegal" to false. The "title" should be a concise name for the document, and the "description" should briefly explain its purpose. Ensure that the document content is as elaborate and detailed as necessary for professional use, typically resembling a legal document prepared by an experienced lawyer. Use a formal tone and structure throughout, do not try to be concise.
+
+
+
+
+
+
+`,
         },
         {
           role: "user",
-          content: prompt,
+          content: `Generate a legal agreement for the following jurisdiction: ${jurisdiction}. Request: ${prompt}`,
         },
       ],
       temperature: 0.3,

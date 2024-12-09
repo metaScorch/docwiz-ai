@@ -61,7 +61,12 @@ const CustomPlaceholder = Extension.create({
   },
 });
 
-export default function Editor({ content, onChange, documentId, onImproveFormatting }) {
+export default function Editor({
+  content,
+  onChange,
+  documentId,
+  onImproveFormatting,
+}) {
   const [isMounted, setIsMounted] = useState(false);
   const [documentValues, setDocumentValues] = useState({});
   const [selection, setSelection] = useState(null);
@@ -73,7 +78,7 @@ export default function Editor({ content, onChange, documentId, onImproveFormatt
   // Define all handler functions first
   const handleEditorUpdate = ({ editor }) => {
     const content = editor.getHTML();
-    
+
     // Update document values based on editor content
     const newValues = {};
     Object.keys(documentValues).forEach((key) => {
@@ -157,10 +162,10 @@ export default function Editor({ content, onChange, documentId, onImproveFormatt
   // Move this function before the editor initialization
   const handleSelection = () => {
     if (!editor) return;
-    
+
     const { view } = editor;
     const { from, to } = view.state.selection;
-    
+
     if (from === to) {
       setSelection(null);
       setPopupPosition(null);
@@ -169,16 +174,16 @@ export default function Editor({ content, onChange, documentId, onImproveFormatt
 
     const selectedText = editor.state.doc.textBetween(from, to);
     const coords = view.coordsAtPos(from);
-    
+
     setSelection({
       text: selectedText,
       from,
-      to
+      to,
     });
-    
+
     setPopupPosition({
       top: coords.top + window.scrollY - 10,
-      left: coords.left + window.scrollX
+      left: coords.left + window.scrollX,
     });
   };
 
@@ -242,7 +247,7 @@ export default function Editor({ content, onChange, documentId, onImproveFormatt
   // Add function to handle suggestion submission
   const handleSuggestionSubmit = async (prompt) => {
     if (!selection) return;
-    
+
     setIsProcessing(true);
     try {
       const response = await fetch("/api/improve-text", {
@@ -258,16 +263,16 @@ export default function Editor({ content, onChange, documentId, onImproveFormatt
       });
 
       const data = await response.json();
-      
+
       if (data.error) throw new Error(data.error);
-      
+
       setPreviewChanges({
         originalText: selection.text,
         newText: data.improvedText,
         from: selection.from,
-        to: selection.to
+        to: selection.to,
       });
-      
+
       setPopupPosition(null); // Hide the suggestion popup
     } catch (error) {
       console.error("Error improving text:", error);
@@ -280,14 +285,15 @@ export default function Editor({ content, onChange, documentId, onImproveFormatt
   // Add these new handler functions
   const handleAcceptChanges = () => {
     if (!previewChanges) return;
-    
-    editor.chain()
+
+    editor
+      .chain()
       .focus()
       .setTextSelection({ from: previewChanges.from, to: previewChanges.to })
       .deleteSelection()
       .insertContent(previewChanges.newText)
       .run();
-      
+
     setPreviewChanges(null);
     setSelection(null);
   };
@@ -299,10 +305,10 @@ export default function Editor({ content, onChange, documentId, onImproveFormatt
 
   const handleImproveFormatting = async () => {
     if (!editor) return;
-    
+
     try {
       const currentContent = editor.storage.markdown.getMarkdown();
-      
+
       // Call the parent's onImproveFormatting handler
       if (onImproveFormatting) {
         const formattedContent = await onImproveFormatting(currentContent);
@@ -326,7 +332,10 @@ export default function Editor({ content, onChange, documentId, onImproveFormatt
   return (
     <div className="max-w-none flex relative">
       <div className="flex-1 border rounded-lg">
-        <MenuBar editor={editor} onImproveFormatting={handleImproveFormatting} />
+        <MenuBar
+          editor={editor}
+          onImproveFormatting={handleImproveFormatting}
+        />
         <EditorContent
           editor={editor}
           className="min-h-[calc(100vh-200px)] p-4"

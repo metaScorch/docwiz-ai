@@ -6,7 +6,8 @@ export default function Sidebar({ documentValues, onValueChange }) {
         {Object.entries(documentValues).map(([key, value]) => (
           <div key={key} className="space-y-1">
             <label className="block text-sm font-medium text-gray-700">
-              {key.replace(/([A-Z])/g, ' $1').trim()} {/* Format camelCase to words */}
+              {key.replace(/([A-Z])/g, " $1").trim()}{" "}
+              {/* Format camelCase to words */}
             </label>
             <input
               type="text"

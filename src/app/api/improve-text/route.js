@@ -30,7 +30,7 @@ ${fullDocument}
 
 Please improve this section based on this request: ${prompt}
 
-Return only the improved section, maintaining proper formatting and ensuring it fits seamlessly into the document.`,
+Return only the improved section, maintaining proper formatting and ensuring it fits seamlessly into the document. Dont mention anything other than the text you are improving. Return the text in MD format.`,
         },
       ],
     });
