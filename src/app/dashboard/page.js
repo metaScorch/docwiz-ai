@@ -22,6 +22,7 @@ import {
 import { NewAgreementForm } from "@/components/NewAgreementForm";
 import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
+import { formatDistanceToNow, isToday, isYesterday, format, isThisWeek, isThisYear } from 'date-fns';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -39,6 +40,7 @@ export default function DashboardPage() {
   const [templates, setTemplates] = useState([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [templateSearchQuery, setTemplateSearchQuery] = useState("");
+  const [userDocuments, setUserDocuments] = useState([]);
 
   const filteredRegistrations = registrations.filter((doc) =>
     Object.values(doc).some(
@@ -56,20 +58,34 @@ export default function DashboardPage() {
         } = await supabase.auth.getUser();
         if (!user) return;
 
-        const { data, error } = await supabase
+        // Fetch registrations
+        const { data: registrationsData, error: registrationsError } = await supabase
           .from("registrations")
           .select("*")
           .eq("user_id", user.id)
           .order("created_at", { ascending: false });
 
-        if (error) throw error;
-        setRegistrations(data || []);
+        if (registrationsError) throw registrationsError;
+        setRegistrations(registrationsData || []);
 
-        // Calculate stats (modify according to your actual data structure)
+        // Fetch user documents
+        const { data: documentsData, error: documentsError } = await supabase
+          .from("user_documents")
+          .select(`
+            *,
+            template:templates(template_name)
+          `)
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+
+        if (documentsError) throw documentsError;
+        setUserDocuments(documentsData || []);
+
+        // Calculate stats
         setStats({
-          totalDocuments: data.length,
-          signedDocuments: data.filter((doc) => doc.status === "signed").length,
-          totalParties: data.reduce(
+          totalDocuments: (documentsData || []).length,
+          signedDocuments: (documentsData || []).filter(doc => doc.status === "signed").length,
+          totalParties: registrationsData.reduce(
             (acc, doc) => acc + (doc.parties?.length || 0),
             0
           ),
@@ -136,6 +152,34 @@ export default function DashboardPage() {
     )
   );
 
+  // Update the helper function
+  function formatRelativeTime(dateStr) {
+    try {
+      const date = new Date(dateStr);
+      
+      if (isToday(date)) {
+        const distance = formatDistanceToNow(date, { addSuffix: false });
+        return distance === 'less than a minute' ? 'just now' : `${distance} ago`;
+      }
+      
+      if (isYesterday(date)) {
+        return 'yesterday';
+      }
+      
+      if (isThisWeek(date)) {
+        return formatDistanceToNow(date, { addSuffix: true });
+      }
+      
+      if (isThisYear(date)) {
+        return format(date, 'MMM d');
+      }
+      
+      return format(date, 'MMM d, yyyy');
+    } catch (error) {
+      return 'Invalid date';
+    }
+  }
+
   if (loading) {
     return (
       <div className="container mx-auto p-6">
@@ -164,7 +208,29 @@ export default function DashboardPage() {
               <div
                 key={template.id}
                 className="p-2 hover:bg-gray-100 cursor-pointer"
-                onClick={() => router.push(`/editor/${template.id}`)}
+                onClick={async () => {
+                  try {
+                    const { data: { user } } = await supabase.auth.getUser();
+                    if (!user) throw new Error('Not authenticated');
+
+                    const { data: newDocument, error } = await supabase
+                      .from('user_documents')
+                      .insert([{
+                        user_id: user.id,
+                        template_id: template.id,
+                        content: template.content,
+                        title: template.template_name,
+                        status: 'draft'
+                      }])
+                      .select()
+                      .single();
+
+                    if (error) throw error;
+                    router.push(`/editor/document/${newDocument.id}`);
+                  } catch (error) {
+                    console.error('Error creating document:', error);
+                  }
+                }}
               >
                 <div className="font-medium">{template.template_name}</div>
                 <div className="text-sm text-gray-500">
@@ -272,9 +338,34 @@ export default function DashboardPage() {
                         <TableCell>
                           <Button
                             size="sm"
-                            onClick={() =>
-                              router.push(`/editor/${template.id}`)
-                            }
+                            onClick={async () => {
+                              try {
+                                // Get current user
+                                const { data: { user } } = await supabase.auth.getUser();
+                                if (!user) throw new Error('Not authenticated');
+
+                                // Create new user document from template
+                                const { data: newDocument, error } = await supabase
+                                  .from('user_documents')
+                                  .insert([{
+                                    user_id: user.id,
+                                    template_id: template.id,
+                                    content: template.content,
+                                    title: template.template_name,
+                                    status: 'draft'
+                                  }])
+                                  .select()
+                                  .single();
+
+                                if (error) throw error;
+
+                                // Redirect to editor with new document ID
+                                router.push(`/editor/document/${newDocument.id}`);
+                              } catch (error) {
+                                console.error('Error creating document:', error);
+                                // Add error handling/notification here
+                              }
+                            }}
                           >
                             Select
                           </Button>
@@ -298,27 +389,66 @@ export default function DashboardPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Parties</TableHead>
+                <TableHead>Title</TableHead>
+                <TableHead>Template</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Date</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead>Last Updated</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredRegistrations.map((doc) => (
+              {userDocuments.map((doc) => (
                 <TableRow key={doc.id}>
                   <TableCell className="font-medium">
-                    {doc.entity_name}
+                    {doc.title}
                   </TableCell>
-                  <TableCell>{doc.registration_type}</TableCell>
-                  <TableCell>{doc.parties?.join(", ") || "N/A"}</TableCell>
-                  <TableCell>{doc.status || "Pending"}</TableCell>
                   <TableCell>
-                    {new Date(doc.created_at).toLocaleString()}
+                    {doc.template?.template_name || 'Custom Document'}
+                  </TableCell>
+                  <TableCell>
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      doc.status === 'draft' 
+                        ? 'bg-yellow-100 text-yellow-800'
+                        : doc.status === 'signed'
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {doc.status || "draft"}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-col">
+                      <span className="text-xs text-muted-foreground">
+                        {formatRelativeTime(doc.created_at)}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-col">
+                      <span className="text-xs text-muted-foreground">
+                        {formatRelativeTime(doc.updated_at || doc.created_at)}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => router.push(`/editor/document/${doc.id}`)}
+                    >
+                      Edit
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
+              {userDocuments.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center text-muted-foreground">
+                    No documents found. Create one by selecting a template or generating a new agreement.
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </CardContent>

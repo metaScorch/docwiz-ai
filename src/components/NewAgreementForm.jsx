@@ -3,17 +3,60 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useRouter } from "next/navigation";
 import { Wand2 } from "lucide-react"; // Import the magic wand icon
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 
 export function NewAgreementForm() {
   const router = useRouter();
+  const supabase = createClientComponentClient();
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    // Add your form submission logic here
-    setLoading(false);
+
+    try {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      // Generate agreement using AI
+      const response = await fetch('/api/generate-agreement', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt,
+          userId: user.id
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+
+      // Create new document
+      const { data: newDocument, error } = await supabase
+        .from('user_documents')
+        .insert([{
+          user_id: user.id,
+          content: data.content,
+          title: data.title,
+          status: 'draft'
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Redirect to editor
+      router.push(`/editor/document/${newDocument.id}`);
+    } catch (error) {
+      console.error('Error:', error);
+      // Add error handling/notification here
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

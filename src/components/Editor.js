@@ -57,14 +57,14 @@ const CustomPlaceholder = Extension.create({
   },
 });
 
-export default function Editor({ content, onChange }) {
+export default function Editor({ content, onChange, documentId }) {
   const [isMounted, setIsMounted] = useState(false);
   const [documentValues, setDocumentValues] = useState({});
 
   // Define all handler functions first
   const handleEditorUpdate = ({ editor }) => {
-    const content = editor.getText();
-
+    const content = editor.getHTML();
+    
     // Update document values based on editor content
     const newValues = {};
     Object.keys(documentValues).forEach((key) => {
@@ -83,7 +83,10 @@ export default function Editor({ content, onChange }) {
       ...newValues,
     }));
 
-    onChange(editor.getHTML());
+    // Call the parent's onChange handler
+    if (onChange) {
+      onChange(content);
+    }
   };
 
   const handlePlaceholderChange = (key, value) => {
