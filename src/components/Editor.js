@@ -166,18 +166,23 @@ export default function Editor({ content, onChange, documentId }) {
         openOnClick: false,
       }),
       Markdown.configure({
-        html: false,
+        html: true,
         transformPastedText: true,
         transformCopiedText: true,
       }),
       CustomPlaceholder,
     ],
-    content,
+    content: content,
     onCreate: ({ editor }) => {
       const initialValues = initializeDocumentValues(editor.getText());
       setDocumentValues(initialValues);
     },
-    onUpdate: handleEditorUpdate,
+    onUpdate: ({ editor }) => {
+      const markdown = editor.storage.markdown.getMarkdown();
+      if (onChange) {
+        onChange(markdown);
+      }
+    },
     editorProps: {
       attributes: {
         class:

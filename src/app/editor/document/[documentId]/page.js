@@ -5,6 +5,7 @@ import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import Editor from "@/components/Editor";
+import { formatDistanceToNow } from "date-fns";
 
 export default function EditorPage({ params }) {
   const router = useRouter();
@@ -13,6 +14,11 @@ export default function EditorPage({ params }) {
   const [content, setContent] = useState("");
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const { documentId } = params;
+  const [, setForceUpdate] = useState(0);
+
+  const formatRelativeTime = (dateString) => {
+    return formatDistanceToNow(new Date(dateString), { addSuffix: true });
+  };
 
   useEffect(() => {
     async function fetchDocument() {
@@ -44,21 +50,36 @@ export default function EditorPage({ params }) {
         return;
       }
 
-      setUserDocument(document);
-      setContent(document.content);
+      if (document) {
+        setUserDocument(document);
+        setContent(document.content);
+      }
     }
 
     fetchDocument();
   }, [documentId, supabase]);
 
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      setForceUpdate(prev => prev + 1);
+    }, 60000);
+
+    return () => clearInterval(intervalId);
+  }, []);
+
   const handleContentChange = async (newContent) => {
+    const newTimestamp = new Date().toISOString();
     setContent(newContent);
+    setUserDocument((prev) => ({
+      ...prev,
+      updated_at: newTimestamp,
+    }));
 
     const { error } = await supabase
       .from("user_documents")
       .update({
         content: newContent,
-        updated_at: new Date().toISOString(),
+        updated_at: newTimestamp,
       })
       .eq("id", documentId);
 
@@ -68,11 +89,13 @@ export default function EditorPage({ params }) {
   };
 
   const handleTitleChange = async (newTitle) => {
+    const newTimestamp = new Date().toISOString();
+
     const { error } = await supabase
       .from("user_documents")
       .update({
         title: newTitle,
-        updated_at: new Date().toISOString(),
+        updated_at: newTimestamp,
       })
       .eq("id", documentId);
 
@@ -81,7 +104,11 @@ export default function EditorPage({ params }) {
       return;
     }
 
-    setUserDocument((prev) => ({ ...prev, title: newTitle }));
+    setUserDocument((prev) => ({
+      ...prev,
+      title: newTitle,
+      updated_at: newTimestamp,
+    }));
     setIsEditingTitle(false);
   };
 
@@ -91,38 +118,45 @@ export default function EditorPage({ params }) {
 
   return (
     <div className="container mx-auto p-6">
-      <div className="flex items-center justify-between mb-6">
-        {isEditingTitle ? (
-          <input
-            type="text"
-            className="text-3xl font-bold bg-transparent border-b border-gray-300 focus:outline-none focus:border-primary"
-            value={userDocument.title}
-            onChange={(e) =>
-              setUserDocument((prev) => ({ ...prev, title: e.target.value }))
-            }
-            onBlur={() => handleTitleChange(userDocument.title)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                handleTitleChange(userDocument.title);
-              } else if (e.key === "Escape") {
-                setIsEditingTitle(false);
+      <div className="flex flex-col mb-6">
+        <div className="flex items-center justify-between">
+          {isEditingTitle ? (
+            <input
+              type="text"
+              className="text-3xl font-bold bg-transparent border-b border-gray-300 focus:outline-none focus:border-primary w-2/3"
+              value={userDocument.title}
+              onChange={(e) =>
+                setUserDocument((prev) => ({ ...prev, title: e.target.value }))
               }
-            }}
-            autoFocus
-          />
-        ) : (
-          <h1
-            className="text-3xl font-bold cursor-pointer hover:opacity-80"
-            onClick={() => setIsEditingTitle(true)}
-          >
-            {userDocument.title}
-          </h1>
-        )}
-        <div className="space-x-4">
-          <Button variant="outline" onClick={() => router.back()}>
-            Back
-          </Button>
-          <Button>Save</Button>
+              onBlur={() => handleTitleChange(userDocument.title)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  handleTitleChange(userDocument.title);
+                } else if (e.key === "Escape") {
+                  setIsEditingTitle(false);
+                }
+              }}
+              autoFocus
+            />
+          ) : (
+            <h1
+              className="text-3xl font-bold cursor-pointer hover:opacity-80"
+              onClick={() => setIsEditingTitle(true)}
+            >
+              {userDocument.title}
+            </h1>
+          )}
+          <div className="space-x-4">
+            <Button variant="outline" onClick={() => router.back()}>
+              Back
+            </Button>
+            <Button>Save</Button>
+          </div>
+        </div>
+        <div className="text-sm text-muted-foreground mt-2">
+          <span>Created {formatRelativeTime(userDocument.created_at)}</span>
+          <span className="mx-2">•</span>
+          <span>Last edited {formatRelativeTime(userDocument.updated_at)}</span>
         </div>
       </div>
 
