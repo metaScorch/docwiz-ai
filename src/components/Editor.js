@@ -15,6 +15,9 @@ import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import "../styles/editor.css";
+import SuggestionPopup from "./SuggestionPopup";
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import ChangePreview from "./ChangePreview";
 
 // Create a new lowlight instance with common languages
 const lowlight = createLowlight(common);
@@ -60,6 +63,11 @@ const CustomPlaceholder = Extension.create({
 export default function Editor({ content, onChange, documentId }) {
   const [isMounted, setIsMounted] = useState(false);
   const [documentValues, setDocumentValues] = useState({});
+  const [selection, setSelection] = useState(null);
+  const [popupPosition, setPopupPosition] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [previewChanges, setPreviewChanges] = useState(null);
+  const supabase = createClientComponentClient();
 
   // Define all handler functions first
   const handleEditorUpdate = ({ editor }) => {
@@ -145,7 +153,35 @@ export default function Editor({ content, onChange, documentId }) {
     [extractPlaceholders]
   );
 
-  // Then initialize the editor
+  // Move this function before the editor initialization
+  const handleSelection = () => {
+    if (!editor) return;
+    
+    const { view } = editor;
+    const { from, to } = view.state.selection;
+    
+    if (from === to) {
+      setSelection(null);
+      setPopupPosition(null);
+      return;
+    }
+
+    const selectedText = editor.state.doc.textBetween(from, to);
+    const coords = view.coordsAtPos(from);
+    
+    setSelection({
+      text: selectedText,
+      from,
+      to
+    });
+    
+    setPopupPosition({
+      top: coords.top + window.scrollY - 10,
+      left: coords.left + window.scrollX
+    });
+  };
+
+  // Then initialize the editor with the handleSelection function
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -195,11 +231,70 @@ export default function Editor({ content, onChange, documentId }) {
           " prose-pre:text-sm",
       },
     },
+    onSelectionUpdate: handleSelection,
   });
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  // Add function to handle suggestion submission
+  const handleSuggestionSubmit = async (prompt) => {
+    if (!selection) return;
+    
+    setIsProcessing(true);
+    try {
+      const response = await fetch("/api/improve-text", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          selectedText: selection.text,
+          fullDocument: editor.getHTML(),
+          prompt,
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (data.error) throw new Error(data.error);
+      
+      setPreviewChanges({
+        originalText: selection.text,
+        newText: data.improvedText,
+        from: selection.from,
+        to: selection.to
+      });
+      
+      setPopupPosition(null); // Hide the suggestion popup
+    } catch (error) {
+      console.error("Error improving text:", error);
+      // Handle error (show toast notification, etc.)
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Add these new handler functions
+  const handleAcceptChanges = () => {
+    if (!previewChanges) return;
+    
+    editor.chain()
+      .focus()
+      .setTextSelection({ from: previewChanges.from, to: previewChanges.to })
+      .deleteSelection()
+      .insertContent(previewChanges.newText)
+      .run();
+      
+    setPreviewChanges(null);
+    setSelection(null);
+  };
+
+  const handleRejectChanges = () => {
+    setPreviewChanges(null);
+    setSelection(null);
+  };
 
   if (!isMounted) {
     return (
@@ -210,18 +305,36 @@ export default function Editor({ content, onChange, documentId }) {
   }
 
   return (
-    <div className="max-w-none flex">
+    <div className="max-w-none flex relative">
       <div className="flex-1 border rounded-lg">
         <MenuBar editor={editor} />
         <EditorContent
           editor={editor}
           className="min-h-[calc(100vh-200px)] p-4"
         />
+        {popupPosition && (
+          <SuggestionPopup
+            position={popupPosition}
+            onSubmit={handleSuggestionSubmit}
+            onClose={() => {
+              setSelection(null);
+              setPopupPosition(null);
+            }}
+          />
+        )}
       </div>
       <Sidebar
         documentValues={documentValues}
         onValueChange={handlePlaceholderChange}
       />
+      {previewChanges && (
+        <ChangePreview
+          originalText={previewChanges.originalText}
+          newText={previewChanges.newText}
+          onAccept={handleAcceptChanges}
+          onReject={handleRejectChanges}
+        />
+      )}
     </div>
   );
 }

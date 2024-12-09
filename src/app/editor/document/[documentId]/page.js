@@ -6,14 +6,16 @@ import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import Editor from "@/components/Editor";
 import { formatDistanceToNow } from "date-fns";
+import { use } from "react";
 
 export default function EditorPage({ params }) {
+  const resolvedParams = use(params);
+  const documentId = resolvedParams.documentId;
   const router = useRouter();
   const supabase = createClientComponentClient();
   const [userDocument, setUserDocument] = useState(null);
   const [content, setContent] = useState("");
   const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const { documentId } = params;
   const [, setForceUpdate] = useState(0);
 
   const formatRelativeTime = (dateString) => {
