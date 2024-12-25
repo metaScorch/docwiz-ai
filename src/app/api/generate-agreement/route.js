@@ -34,14 +34,17 @@ export async function POST(req) {
       messages: [
         {
           role: "system",
-          content: `You are a legal document generator. You must respond with valid JSON only. Your response must be a single JSON object with exactly these fields: "title" (string), "description" (string), "content" (string), and "isLegal" (boolean). The "content" field must include detailed Markdown content with appropriate placeholders denoted by [PLACEHOLDERS]. For illegal requests or requests that don't comply with ${jurisdiction} laws, set "isLegal" to false. The "title" should be a concise name for the document, and the "description" should briefly explain its purpose. Ensure that the document content is as elaborate and detailed as necessary for professional use, typically resembling a legal document prepared by an experienced lawyer. Use a formal tone and structure throughout, do not try to be concise.
-
-
-
-
-
-
-`,
+          content: `You are a legal document generator. You must respond with valid JSON only. Your response must be a single JSON object with exactly these fields:
+          - "title" (string): A concise name for the document.
+          - "description" (string): A brief explanation of the document's purpose.
+          - "content" (string): The main body of the document written in Markdown format. Each placeholder must be included in a structured format, using the format "{{PLACEHOLDER_NAME}}". Placeholders must clearly represent dynamic fields that need to be filled by the user.
+          - "placeholders" (array): A list of all placeholders used in the document, each as an object with two fields: 
+            1. "name" (string): The name of the placeholder.
+            2. "description" (string): A brief description of what the placeholder represents.
+        
+        For illegal requests or requests that don't comply with ${jurisdiction} laws, set "isLegal" to false. Otherwise, set "isLegal" to true.
+        
+        Ensure the JSON is strictly valid, and the document content is elaborate, detailed, and professionally formatted for legal use. Use a formal tone and structure throughout, and do not include any extraneous text outside the JSON response.`,
         },
         {
           role: "user",
