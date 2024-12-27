@@ -1,20 +1,63 @@
-.custom-placeholder {
-  background-color: #e9ecef;
+/* Base Editor Styles */
+.ProseMirror {
+  > * + * {
+    margin-top: 0.75em;
+  }
+  
+  outline: none;
+  min-height: calc(100vh - 10rem);
+}
+
+/* Placeholder Styles */
+.ProseMirror p.is-editor-empty:first-child::before {
+  color: #adb5bd;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* Dynamic Field Styles */
+.placeholder-text {
+  background-color: #e8f0fe;
   border-radius: 4px;
-  padding: 2px 4px;
-  margin: 0 2px;
-  border: 1px solid #ced4da;
-  cursor: pointer;
-  color: #495057;
-  transition: all 0.2s ease;
+  padding: 2px 6px;
+  margin: 0 1px;
+  border: 1px solid #4285f4;
+  color: #1967d2;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.875em;
+  position: relative;
+  display: inline-block;
 }
 
-.custom-placeholder:hover {
-  background-color: #dee2e6;
-  border-color: #adb5bd;
+/* Dark mode styles */
+.dark .placeholder-text {
+  background-color: #1a365d;
+  border-color: #4299e1;
+  color: #63b3ed;
 }
 
-.custom-placeholder.active {
-  background-color: #e7f5ff;
-  border-color: #74c0fc;
+/* Syntax Highlighting */
+pre {
+  background: #0d1117;
+  padding: 1rem;
+  border-radius: 0.5rem;
+}
+
+code {
+  color: #c9d1d9;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+/* General editor styles */
+.editor-toolbar {
+  border-bottom: 1px solid #e5e7eb;
+  background-color: #ffffff;
+  padding: 0.5rem;
+}
+
+.dark .editor-toolbar {
+  border-bottom-color: #374151;
+  background-color: #111827;
 }
