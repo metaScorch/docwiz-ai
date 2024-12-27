@@ -30,6 +30,7 @@ import {
   isThisWeek,
   isThisYear,
 } from "date-fns";
+import Image from "next/image";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -45,6 +46,7 @@ export default function DashboardPage() {
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [templateSearchQuery, setTemplateSearchQuery] = useState("");
   const [userDocuments, setUserDocuments] = useState([]);
+  const [documentSearchQuery, setDocumentSearchQuery] = useState("");
 
   useEffect(() => {
     async function fetchData() {
@@ -159,6 +161,15 @@ export default function DashboardPage() {
     }
   }
 
+  const filteredDocuments = userDocuments.filter((doc) =>
+    Object.values({
+      title: doc.title || "",
+      description: doc.description || "",
+    }).some((value) =>
+      value.toLowerCase().includes(documentSearchQuery.toLowerCase())
+    )
+  );
+
   if (loading) {
     return (
       <div className="container mx-auto p-6">
@@ -169,6 +180,18 @@ export default function DashboardPage() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
+      {/* Logo Section */}
+      <div className="flex justify-start mb-8">
+        <Image
+          src="/logo.png"
+          alt="DocWiz Logo"
+          width={180}
+          height={60}
+          priority
+          className="h-auto"
+        />
+      </div>
+
       {/* Stats Section */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
@@ -321,6 +344,16 @@ export default function DashboardPage() {
       <Card>
         <CardHeader>
           <CardTitle>Recent Documents</CardTitle>
+          <div className="mt-4">
+            <br></br>
+            <Input
+              type="text"
+              placeholder="Search documents..."
+              value={documentSearchQuery}
+              onChange={(e) => setDocumentSearchQuery(e.target.value)}
+              className="max-w-sm"
+            />
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -335,7 +368,7 @@ export default function DashboardPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {userDocuments.map((doc) => (
+              {filteredDocuments.map((doc) => (
                 <TableRow key={doc.id}>
                   <TableCell className="font-medium">{doc.title}</TableCell>
                   <TableCell>
@@ -379,14 +412,13 @@ export default function DashboardPage() {
                   </TableCell>
                 </TableRow>
               ))}
-              {userDocuments.length === 0 && (
+              {filteredDocuments.length === 0 && (
                 <TableRow>
                   <TableCell
                     colSpan={6}
                     className="text-center text-muted-foreground"
                   >
-                    No documents found. Create one by selecting a template or
-                    generating a new agreement.
+                    No documents found matching your search.
                   </TableCell>
                 </TableRow>
               )}
