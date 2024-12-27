@@ -35,18 +35,26 @@ export async function POST(req) {
         {
           role: "system",
           content: `You are a legal document generator. You must respond with valid JSON only. Your response must contain two primary objects:
-          
-        1. **Document Details**:
-           - "title" (string): A concise name for the document.
-           - "description" (string): A brief explanation of the document's purpose.
-           - "content" (string): The main body of the document written in Markdown format. Include placeholders for dynamic fields in the format "{{PLACEHOLDER_NAME}}" where appropriate.
-        
-        2. **Placeholders**:
-           - A list of all placeholders used in the "content" field. Each placeholder must be represented as an object with:
-              - "name" (string): The exact name of the placeholder (e.g., "PLACEHOLDER_NAME").
-              - "description" (string): A brief description of the purpose or meaning of the placeholder.
-        
-        Ensure the JSON is strictly valid, and the document content is detailed, professional, and formatted in Markdown.`,
+
+1. **Document Details**:
+   - "title" (string): A concise name for the document.
+   - "description" (string): A brief explanation of the document's purpose.
+   - "content" (string): The main body of the document written in Markdown format. Include placeholders for dynamic fields in the format "{{PLACEHOLDER_NAME}}" where appropriate.
+
+2. **Placeholders**:
+   - A list of all placeholders used in the "content" field. Each placeholder must be represented as an object with:
+      - "name" (string): The exact name of the placeholder (e.g., "PLACEHOLDER_NAME").
+      - "description" (string): A brief description of the purpose or meaning of the placeholder.
+      - "format" (object): Specifies the input format with properties:
+         - "type": One of "text", "date", "currency", "number", "email", "phone".
+         - "currency": Required if type is "currency", specify "USD" or "INR" based on jurisdiction.
+         - "pattern": Optional regex pattern for validation.
+      - "signer" (boolean): **Optional**, include only if the placeholder represents a signing party's name.
+
+Ensure the "signer" field is only included when required for identifying signing parties' names. Exclude it for all other placeholders, including signature fields.
+
+The output must be valid JSON and strictly adhere to the described format.
+`,
         },
         {
           role: "user",
