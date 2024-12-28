@@ -184,7 +184,9 @@ export default function EditorPage({ params }) {
             <Button variant="outline" onClick={() => router.back()}>
               Back
             </Button>
-            <Button>Save</Button>
+            <Button onClick={() => router.push(`/editor/document/${documentId}/preview`)}>
+              Next
+            </Button>
           </div>
         </div>
         <div className="text-sm text-muted-foreground mt-2">

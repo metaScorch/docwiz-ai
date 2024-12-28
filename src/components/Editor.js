@@ -97,21 +97,24 @@ export default function Editor({
   }, []);
 
   // Add this function to replace placeholders with their values
-  const replaceContentPlaceholders = useCallback((content) => {
-    if (!content || !documentValues) return content;
-    
-    let processedContent = content;
-    Object.entries(documentValues).forEach(([name, details]) => {
-      const placeholder = `{{${name}}}`;
-      const value = details.value || placeholder;
-      processedContent = processedContent.replace(
-        new RegExp(placeholder, 'g'),
-        value
-      );
-    });
-    
-    return processedContent;
-  }, [documentValues]);
+  const replaceContentPlaceholders = useCallback(
+    (content) => {
+      if (!content || !documentValues) return content;
+
+      let processedContent = content;
+      Object.entries(documentValues).forEach(([name, details]) => {
+        const placeholder = `{{${name}}}`;
+        const value = details.value || placeholder;
+        processedContent = processedContent.replace(
+          new RegExp(placeholder, "g"),
+          value
+        );
+      });
+
+      return processedContent;
+    },
+    [documentValues]
+  );
 
   // Editor initialization
   const editor = useEditor({
@@ -142,7 +145,7 @@ export default function Editor({
     onUpdate: ({ editor }) => {
       // Get the markdown content
       const markdown = editor.storage.markdown.getMarkdown();
-      
+
       // Replace any displayed values back to placeholders before saving
       let processedMarkdown = markdown;
       Object.entries(documentValues).forEach(([name, details]) => {
@@ -150,12 +153,12 @@ export default function Editor({
           const value = details.value;
           const placeholder = `{{${name}}}`;
           processedMarkdown = processedMarkdown.replace(
-            new RegExp(value, 'g'),
+            new RegExp(value, "g"),
             placeholder
           );
         }
       });
-      
+
       if (onChange) {
         onChange(processedMarkdown);
       }
@@ -260,10 +263,36 @@ export default function Editor({
 
     // Update database if we have a document ID
     if (documentId) {
+      // Get existing placeholder values from database
+      const { data: document, error: fetchError } = await supabase
+        .from("user_documents")
+        .select("placeholder_values")
+        .eq("id", documentId)
+        .single();
+
+      if (fetchError) {
+        console.error(
+          "Error fetching existing placeholder values:",
+          fetchError
+        );
+        return;
+      }
+
+      // Create a map of existing placeholder data
+      const existingPlaceholders = document.placeholder_values.reduce(
+        (acc, placeholder) => {
+          acc[placeholder.name] = placeholder;
+          return acc;
+        },
+        {}
+      );
+
+      // Merge new values while preserving existing metadata
       const placeholderArray = Object.entries(newValues).map(
         ([name, details]) => ({
+          ...existingPlaceholders[name], // Preserve existing metadata
           name,
-          value: details.value || "", // Ensure we never send undefined
+          value: details.value || "", // Update only the value
         })
       );
 

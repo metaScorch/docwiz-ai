@@ -53,8 +53,7 @@ export async function POST(req) {
 
 Ensure the "signer" field is only included when required for identifying signing parties' names. Exclude it for all other placeholders, including signature fields.
 
-The output must be valid JSON and strictly adhere to the described format.
-`,
+The output must be valid JSON and strictly adhere to the described format.`,
         },
         {
           role: "user",

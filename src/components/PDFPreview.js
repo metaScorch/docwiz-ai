@@ -1,53 +1,59 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { pdf } from "@react-pdf/renderer";
-import { Document, Page } from "react-pdf";
+import { Document, Page, pdfjs } from "react-pdf";
 import { marked } from "marked";
-import "react-pdf/dist/Page/AnnotationLayer.css";
-import "react-pdf/dist/Page/TextLayer.css";
+
+// Initialize PDF.js worker with a local path
+pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.js";
 
 export default function PDFPreview({ content, placeholderValues }) {
   const [processedContent, setProcessedContent] = useState("");
   const [pdfUrl, setPdfUrl] = useState(null);
   const [numPages, setNumPages] = useState(null);
 
-  // Replace placeholders with their values
   useEffect(() => {
     if (!content || !placeholderValues) return;
 
     let processedText = content;
     Object.entries(placeholderValues).forEach(([key, details]) => {
       const placeholder = `{{${key}}}`;
-      const value = details.value || placeholder; // Keep placeholder if no value
+      const value = details.value || "";
       processedText = processedText.replace(
         new RegExp(placeholder, "g"),
         value
       );
     });
 
-    // Convert Markdown to HTML
-    const htmlContent = marked(processedText);
-    setProcessedContent(htmlContent);
+    // Convert Markdown to HTML and add basic styling
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              line-height: 1.6;
+              padding: 40px;
+              max-width: 800px;
+              margin: 0 auto;
+            }
+            h1, h2 { color: #333; }
+          </style>
+        </head>
+        <body>
+          ${marked(processedText)}
+        </body>
+      </html>
+    `;
 
-    // Generate PDF
-    const generatePDF = async () => {
-      try {
-        // Create PDF document
-        const blob = new Blob([htmlContent], { type: "text/html" });
-        const url = URL.createObjectURL(blob);
-        setPdfUrl(url);
-      } catch (error) {
-        console.error("Error generating PDF:", error);
-      }
-    };
-
-    generatePDF();
+    // Generate PDF using html2pdf or similar library
+    const blob = new Blob([htmlContent], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    setPdfUrl(url);
 
     return () => {
-      if (pdfUrl) {
-        URL.revokeObjectURL(pdfUrl);
-      }
+      if (pdfUrl) URL.revokeObjectURL(pdfUrl);
     };
   }, [content, placeholderValues]);
 
@@ -55,9 +61,7 @@ export default function PDFPreview({ content, placeholderValues }) {
     setNumPages(numPages);
   };
 
-  if (!pdfUrl) {
-    return <div>Loading PDF...</div>;
-  }
+  if (!pdfUrl) return <div>Loading PDF...</div>;
 
   return (
     <div className="pdf-preview h-full overflow-auto">
@@ -65,6 +69,7 @@ export default function PDFPreview({ content, placeholderValues }) {
         file={pdfUrl}
         onLoadSuccess={onDocumentLoadSuccess}
         className="flex flex-col items-center"
+        error="Failed to load PDF. Please try again."
       >
         {Array.from(new Array(numPages), (el, index) => (
           <Page
