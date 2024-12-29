@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import PDFPreview from "@/components/PDFPreview";
 import { toast } from "sonner";
+import { generatePDF } from "@/components/PDFGenerator";
 
 export default function PreviewPage({ params }) {
   const documentId = use(params).documentId;
@@ -16,6 +17,7 @@ export default function PreviewPage({ params }) {
   const [document, setDocument] = useState(null);
   const [signers, setSigners] = useState([]);
   const [signerEmails, setSignerEmails] = useState({});
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // Add email validation regex
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -37,15 +39,24 @@ export default function PreviewPage({ params }) {
 
       // Extract signers with their values
       if (document.placeholder_values) {
-        const signerFields = document.placeholder_values.filter(
-          (field) => field.signer === true
-        );
+        console.log("Fetched placeholder values:", document.placeholder_values);
+        
+        const signerFields = document.placeholder_values.filter(field => {
+          const isSigner = field.signer === true;
+          if (isSigner) {
+            console.log("Found signer field:", field);
+          }
+          return isSigner;
+        });
+        
+        console.log("Extracted signer fields:", signerFields);
         setSigners(signerFields);
 
-        // Initialize email state with existing emails if available
+        // Initialize email state
         const initialEmails = {};
         signerFields.forEach((signer) => {
           initialEmails[signer.name] = signer.email || "";
+          console.log(`Setting initial email for ${signer.name}:`, signer.email || "");
         });
         setSignerEmails(initialEmails);
       }
@@ -63,8 +74,16 @@ export default function PreviewPage({ params }) {
   };
 
   const handleSendForSigning = async () => {
+    setIsProcessing(true);
     try {
-      // Validate all emails are provided and valid
+      // Debug logs for placeholder values
+      console.log("All placeholder values:", document.placeholder_values);
+      
+      // Log a sample placeholder value
+      const signerPlaceholders = document.placeholder_values.filter(field => field.signer === true);
+      console.log("Signer placeholders:", signerPlaceholders);
+      
+      // Validate emails
       const invalidEmails = Object.entries(signerEmails).some(
         ([_, email]) => !email || !emailRegex.test(email)
       );
@@ -74,22 +93,97 @@ export default function PreviewPage({ params }) {
         return;
       }
 
-      // Update placeholder_values with emails
-      const updatedPlaceholderValues = document.placeholder_values.map(
-        (field) => {
-          if (field.signer) {
-            return { ...field, email: signerEmails[field.name] };
-          }
-          return field;
-        }
+      // Generate PDF with content and placeholder values
+      const pdfBlob = await generatePDF(
+        document.content,
+        document.placeholder_values
       );
+      if (!pdfBlob) throw new Error("PDF generation failed");
 
-      // Update document status and placeholder_values
+      // 2. Upload to Supabase Storage
+      const fileName = `agreements/${documentId}/${Date.now()}.pdf`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("documents")
+        .upload(fileName, pdfBlob, {
+          contentType: "application/pdf",
+        });
+
+      if (uploadError) throw uploadError;
+
+      // 3. Get public URL
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("documents").getPublicUrl(fileName);
+
+      // Add this before the SignWell API call
+      const signersPayload = signers.map((signer, index) => {
+        const signerFields = document.placeholder_values.filter(field => 
+          field.signer === true && field.name === signer.name
+        );
+
+        // Map the fields with their actual positions from placeholder_values
+        const fields = signerFields.map(field => ({
+          type: "signature",
+          x: field.x || 100,
+          y: field.y || 100,
+          page: field.page || 1,
+          width: field.width || 120,
+          height: field.height || 60,
+        }));
+
+        return {
+          name: signer.value,
+          email: signerEmails[signer.name],
+          fields: fields,
+        };
+      });
+
+      console.log("Final signers payload:", signersPayload);
+
+      // Then use signersPayload in your API call
+      const signwellResponse = await fetch("/api/signwell/create-document", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileUrl: publicUrl,
+          documentName: document.title || "Untitled Document",
+          signers: signersPayload,
+        }),
+      });
+
+      if (!signwellResponse.ok) {
+        const errorData = await signwellResponse.json();
+        throw new Error(
+          `SignWell Error: ${errorData.message || "Unknown error"}`
+        );
+      }
+
+      const signwellData = await signwellResponse.json();
+
+      // 5. Update document status and store agreement details
       const { error: updateError } = await supabase
         .from("user_documents")
         .update({
           status: "pending_signature",
-          placeholder_values: updatedPlaceholderValues,
+          placeholder_values: document.placeholder_values.map((field) => {
+            if (field.signer) {
+              return { ...field, email: signerEmails[field.name] };
+            }
+            return field;
+          }),
+          document: {
+            originalPdf: publicUrl,
+            signwellId: signwellData.id,
+            signers: Object.entries(signerEmails).map(([name, email]) => ({
+              name,
+              email,
+              status: "pending",
+            })),
+            createdAt: new Date().toISOString(),
+            lastUpdated: new Date().toISOString(),
+            documentStatus: "pending_signature",
+            signwellData: signwellData,
+          },
         })
         .eq("id", documentId);
 
@@ -98,8 +192,10 @@ export default function PreviewPage({ params }) {
       toast.success("Document sent for signing!");
       router.push("/dashboard");
     } catch (error) {
-      console.error("Error sending document for signing:", error);
-      toast.error("Failed to send document for signing");
+      console.error("Error:", error);
+      toast.error(error.message || "Failed to send document for signing");
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -170,8 +266,9 @@ export default function PreviewPage({ params }) {
             <Button
               onClick={handleSendForSigning}
               className="px-6 bg-blue-600 hover:bg-blue-700"
+              disabled={isProcessing}
             >
-              Send for Signing
+              {isProcessing ? "Processing..." : "Send for Signing"}
             </Button>
           </div>
         </div>
