@@ -3,7 +3,13 @@
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Loader2, Check, ChevronsUpDown } from "lucide-react";
+import {
+  ArrowLeft,
+  Loader2,
+  Check,
+  ChevronsUpDown,
+  UserCircle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -25,6 +31,13 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { industries } from "@/data/industries";
+import Image from "next/image";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -38,6 +51,9 @@ export default function ProfilePage() {
     jurisdiction: "",
     authorized_signatory: "",
     signatory_email: "",
+    registration_type: "",
+    domain: "",
+    description: "",
   });
 
   useEffect(() => {
@@ -66,6 +82,9 @@ export default function ProfilePage() {
           jurisdiction: registration.jurisdiction || "",
           authorized_signatory: registration.authorized_signatory || "",
           signatory_email: registration.signatory_email || "",
+          registration_type: registration.registration_type || "",
+          domain: registration.domain || "",
+          description: registration.description || "",
         });
       } catch (error) {
         console.error("Error loading profile:", error);
@@ -126,6 +145,70 @@ export default function ProfilePage() {
 
   return (
     <div className="container max-w-4xl mx-auto p-6">
+      <div className="flex justify-between items-center mb-8">
+        <Image
+          src="/logo.png"
+          alt="DocWiz Logo"
+          width={180}
+          height={60}
+          priority
+          className="h-auto"
+        />
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="flex items-center gap-2">
+              <UserCircle className="h-5 w-5" />
+              My Account
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem onClick={() => router.push("/profile")}>
+              Profile
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={async () => {
+                try {
+                  const { data: subscription } = await supabase
+                    .from("subscriptions")
+                    .select("status, stripe_subscription_id")
+                    .eq("registration_id", profile?.id)
+                    .single();
+
+                  if (
+                    subscription?.status === "active" &&
+                    subscription?.stripe_subscription_id
+                  ) {
+                    const response = await fetch("/api/create-billing-portal", {
+                      method: "POST",
+                    });
+                    const { session_url, error } = await response.json();
+                    if (error) throw new Error(error);
+                    window.location.href = session_url;
+                  } else {
+                    router.push("/pricing");
+                  }
+                } catch (error) {
+                  console.error("Error handling billing:", error);
+                  router.push("/pricing");
+                }
+              }}
+            >
+              Billing
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={async () => {
+                await supabase.auth.signOut();
+                router.push("/sign-in");
+              }}
+              className="text-red-600"
+            >
+              Logout
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
       <Button
         variant="ghost"
         className="mb-6 text-muted-foreground hover:text-foreground"
@@ -146,7 +229,9 @@ export default function ProfilePage() {
             {Object.entries(formData).map(([key, value]) => (
               <div key={key} className="space-y-2">
                 <Label htmlFor={key} className="text-sm font-medium capitalize">
-                  {key.replace("_", " ")}
+                  {key === "registration_type"
+                    ? "Organization Type"
+                    : key.replace("_", " ")}
                 </Label>
                 {editing ? (
                   key === "jurisdiction" ? (
@@ -203,6 +288,15 @@ export default function ProfilePage() {
                         </PopoverContent>
                       </Popover>
                     </div>
+                  ) : key === "description" ? (
+                    <textarea
+                      id={key}
+                      value={value}
+                      onChange={(e) =>
+                        setFormData({ ...formData, [key]: e.target.value })
+                      }
+                      className="flex min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 max-w-md"
+                    />
                   ) : (
                     <Input
                       id={key}
