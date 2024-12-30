@@ -176,24 +176,10 @@ const SignedDocumentsDialog = ({
   onSearchChange,
   formatRelativeTime,
 }) => {
-  const getSignedDocumentUrl = (document) => {
-    try {
-      // Access the signedPdfUrl from the document column
-      return document.document?.signedPdfUrl || document.document?.originalPdf;
-    } catch (error) {
-      console.error("Error getting signed document URL:", error);
-      return null;
-    }
-  };
+  const router = useRouter();
 
   const handleViewDocument = (doc) => {
-    const url = getSignedDocumentUrl(doc);
-    if (url) {
-      window.open(url, "_blank");
-    } else {
-      console.error("No signed document URL found");
-      // Optionally show an error message to the user
-    }
+    router.push(`/editor/document/${doc.id}`);
   };
 
   return (
@@ -223,7 +209,7 @@ const SignedDocumentsDialog = ({
                   <TableHead>Document Title</TableHead>
                   <TableHead>Template</TableHead>
                   <TableHead>Created</TableHead>
-                  <TableHead>Signed Date</TableHead>
+                  <TableHead>Completed</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -491,7 +477,21 @@ export default function DashboardPage() {
             <DropdownMenuItem onClick={() => router.push("/profile")}>
               Profile
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => router.push("/billing")}>
+            <DropdownMenuItem
+              onClick={async () => {
+                try {
+                  const response = await fetch("/api/create-billing-portal", {
+                    method: "POST",
+                  });
+                  const { session_url, error } = await response.json();
+
+                  if (error) throw new Error(error);
+                  window.location.href = session_url;
+                } catch (error) {
+                  console.error("Error opening billing portal:", error);
+                }
+              }}
+            >
               Billing
             </DropdownMenuItem>
             <DropdownMenuItem
