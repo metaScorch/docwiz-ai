@@ -786,7 +786,7 @@ export default function DashboardPage() {
                       size="sm"
                       onClick={() => router.push(`/editor/document/${doc.id}`)}
                     >
-                      Edit
+                      {doc.status === "draft" ? "Edit" : "View"}
                     </Button>
                   </TableCell>
                 </TableRow>

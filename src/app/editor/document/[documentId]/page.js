@@ -8,6 +8,7 @@ import Editor from "@/components/Editor";
 import { formatDistanceToNow } from "date-fns";
 import { use } from "react";
 import LoadingModal from "@/components/LoadingModal";
+import { redirect } from "next/navigation";
 
 export default function EditorPage({ params }) {
   const resolvedParams = use(params);
@@ -51,6 +52,15 @@ export default function EditorPage({ params }) {
 
       if (documentError) {
         console.error("Error fetching document:", documentError);
+        return;
+      }
+
+      // Redirect to tracking page if document is pending signature or completed
+      if (
+        document.status === "pending_signature" ||
+        document.status === "completed"
+      ) {
+        router.push(`/editor/document/${documentId}/tracking`);
         return;
       }
 
