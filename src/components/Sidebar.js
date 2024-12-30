@@ -28,41 +28,34 @@ export default function Sidebar({ documentValues, onValueChange }) {
 
       <ScrollArea className="h-[calc(100vh-10rem)]">
         <div className="p-4 space-y-6">
-          {Object.entries(documentValues).map(([name, field]) => {
-            console.log("Rendering field:", name, field);
-            return (
-              <div key={name} className="space-y-2">
-                <Label htmlFor={name} className="text-sm font-medium">
-                  {name
-                    .replace(/_/g, " ")
-                    .split(" ")
-                    .map(
-                      (word) =>
-                        word.charAt(0).toUpperCase() +
-                        word.slice(1).toLowerCase()
-                    )
-                    .join(" ")}
-                </Label>
+          {Object.entries(documentValues).map(([name, field]) => (
+            <div key={name} className="space-y-2">
+              <Label htmlFor={name} className="text-sm font-medium">
+                {name
+                  .replace(/_/g, " ")
+                  .split(" ")
+                  .map(
+                    (word) =>
+                      word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+                  )
+                  .join(" ")}
+              </Label>
 
-                <Input
-                  id={name}
-                  value={field.value || ""}
-                  onChange={(e) => {
-                    console.log("Input change:", name, e.target.value);
-                    onValueChange(name, e.target.value);
-                  }}
-                  placeholder={`Enter ${name.toLowerCase().replace(/_/g, " ")}`}
-                  className="bg-background"
-                />
+              <Input
+                id={name}
+                value={field.value || ""}
+                onChange={(e) => onValueChange(name, e.target.value)}
+                placeholder={`Enter ${name.toLowerCase().replace(/_/g, " ")}`}
+                className="bg-background"
+              />
 
-                {field.description && (
-                  <p className="text-xs text-muted-foreground">
-                    {field.description}
-                  </p>
-                )}
-              </div>
-            );
-          })}
+              {field.description && (
+                <p className="text-xs text-muted-foreground">
+                  {field.description}
+                </p>
+              )}
+            </div>
+          ))}
         </div>
       </ScrollArea>
 

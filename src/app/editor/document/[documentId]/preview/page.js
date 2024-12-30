@@ -40,15 +40,15 @@ export default function PreviewPage({ params }) {
       // Extract signers with their values
       if (document.placeholder_values) {
         console.log("Fetched placeholder values:", document.placeholder_values);
-        
-        const signerFields = document.placeholder_values.filter(field => {
+
+        const signerFields = document.placeholder_values.filter((field) => {
           const isSigner = field.signer === true;
           if (isSigner) {
             console.log("Found signer field:", field);
           }
           return isSigner;
         });
-        
+
         console.log("Extracted signer fields:", signerFields);
         setSigners(signerFields);
 
@@ -56,7 +56,10 @@ export default function PreviewPage({ params }) {
         const initialEmails = {};
         signerFields.forEach((signer) => {
           initialEmails[signer.name] = signer.email || "";
-          console.log(`Setting initial email for ${signer.name}:`, signer.email || "");
+          console.log(
+            `Setting initial email for ${signer.name}:`,
+            signer.email || ""
+          );
         });
         setSignerEmails(initialEmails);
       }
@@ -78,11 +81,13 @@ export default function PreviewPage({ params }) {
     try {
       // Debug logs for placeholder values
       console.log("All placeholder values:", document.placeholder_values);
-      
+
       // Log a sample placeholder value
-      const signerPlaceholders = document.placeholder_values.filter(field => field.signer === true);
+      const signerPlaceholders = document.placeholder_values.filter(
+        (field) => field.signer === true
+      );
       console.log("Signer placeholders:", signerPlaceholders);
-      
+
       // Validate emails
       const invalidEmails = Object.entries(signerEmails).some(
         ([_, email]) => !email || !emailRegex.test(email)
@@ -117,12 +122,12 @@ export default function PreviewPage({ params }) {
 
       // Add this before the SignWell API call
       const signersPayload = signers.map((signer, index) => {
-        const signerFields = document.placeholder_values.filter(field => 
-          field.signer === true && field.name === signer.name
+        const signerFields = document.placeholder_values.filter(
+          (field) => field.signer === true && field.name === signer.name
         );
 
         // Map the fields with their actual positions from placeholder_values
-        const fields = signerFields.map(field => ({
+        const fields = signerFields.map((field) => ({
           type: "signature",
           x: field.x || 100,
           y: field.y || 100,

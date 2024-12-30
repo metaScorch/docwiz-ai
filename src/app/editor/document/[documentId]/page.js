@@ -184,7 +184,11 @@ export default function EditorPage({ params }) {
             <Button variant="outline" onClick={() => router.back()}>
               Back
             </Button>
-            <Button onClick={() => router.push(`/editor/document/${documentId}/preview`)}>
+            <Button
+              onClick={() =>
+                router.push(`/editor/document/${documentId}/preview`)
+              }
+            >
               Next
             </Button>
           </div>

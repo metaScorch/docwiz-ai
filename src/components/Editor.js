@@ -195,9 +195,13 @@ export default function Editor({
 
         // If we have values in the database, update the placeholders
         if (!error && document?.placeholder_values?.length > 0) {
-          document.placeholder_values.forEach(({ name, value }) => {
-            if (placeholders[name]) {
-              placeholders[name].value = value;
+          document.placeholder_values.forEach((dbPlaceholder) => {
+            if (placeholders[dbPlaceholder.name]) {
+              // Preserve all metadata from the database
+              placeholders[dbPlaceholder.name] = {
+                ...dbPlaceholder,
+                value: dbPlaceholder.value || "",
+              };
             }
           });
         }

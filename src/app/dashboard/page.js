@@ -41,6 +41,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { UserCircle } from "lucide-react";
 
+const STATUS_FILTERS = [
+  { value: "all", label: "All" },
+  { value: "draft", label: "Draft" },
+  { value: "pending_signature", label: "Pending Signature" },
+  { value: "completed", label: "Completed" },
+];
+
 // Define PartiesDialog as a separate component
 const PartiesDialog = ({
   open,
@@ -86,7 +93,13 @@ const PartiesDialog = ({
                     {["draft", "pending_signature", "completed"].map(
                       (status) => (
                         <div key={status} className="text-sm">
-                          <div className="font-medium capitalize">{status}</div>
+                          <div className="font-medium">
+                            {status === "pending_signature"
+                              ? "Pending Signature"
+                              : status === "draft"
+                                ? "Draft"
+                                : "Completed"}
+                          </div>
                           <div>
                             {
                               party.documents.filter(
@@ -115,13 +128,23 @@ const PartiesDialog = ({
                             <span
                               className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                                 doc.status === "draft"
-                                  ? "bg-yellow-100 text-yellow-800"
-                                  : doc.status === "completed"
-                                    ? "bg-green-100 text-green-800"
-                                    : "bg-gray-100 text-gray-800"
+                                  ? "bg-yellow-100 text-yellow-800 border border-yellow-200"
+                                  : doc.status === "completed" ||
+                                      doc.status === "signed"
+                                    ? "bg-green-100 text-green-800 border border-green-200"
+                                    : doc.status === "pending_signature"
+                                      ? "bg-blue-100 text-blue-800 border border-blue-200"
+                                      : "bg-gray-100 text-gray-800 border border-gray-200"
                               }`}
                             >
-                              {doc.status}
+                              {doc.status === "pending_signature"
+                                ? "Pending Signature"
+                                : doc.status === "draft"
+                                  ? "Draft"
+                                  : doc.status === "completed" ||
+                                      doc.status === "signed"
+                                    ? "Completed"
+                                    : doc.status}
                             </span>
                           </TableCell>
                           <TableCell>
@@ -166,9 +189,9 @@ const SignedDocumentsDialog = ({
   const handleViewDocument = (doc) => {
     const url = getSignedDocumentUrl(doc);
     if (url) {
-      window.open(url, '_blank');
+      window.open(url, "_blank");
     } else {
-      console.error('No signed document URL found');
+      console.error("No signed document URL found");
       // Optionally show an error message to the user
     }
   };
@@ -253,6 +276,7 @@ export default function DashboardPage() {
   const [partySearchQuery, setPartySearchQuery] = useState("");
   const [showSignedDocsDialog, setShowSignedDocsDialog] = useState(false);
   const [signedDocsSearchQuery, setSignedDocsSearchQuery] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState("all");
 
   useEffect(() => {
     async function fetchData() {
@@ -393,14 +417,21 @@ export default function DashboardPage() {
     }
   }
 
-  const filteredDocuments = userDocuments.filter((doc) =>
-    Object.values({
+  const filteredDocuments = userDocuments.filter((doc) => {
+    const matchesSearch = Object.values({
       title: doc.title || "",
       description: doc.description || "",
     }).some((value) =>
       value.toLowerCase().includes(documentSearchQuery.toLowerCase())
-    )
-  );
+    );
+
+    const matchesStatus =
+      selectedStatus === "all" ||
+      doc.status === selectedStatus ||
+      (selectedStatus === "completed" && doc.status === "signed");
+
+    return matchesSearch && matchesStatus;
+  });
 
   const filteredParties = uniqueParties.filter((party) => {
     const searchTerm = partySearchQuery.toLowerCase();
@@ -416,9 +447,10 @@ export default function DashboardPage() {
   });
 
   const filteredSignedDocuments = userDocuments.filter((doc) => {
-    const isSignedOrCompleted = doc.status === "signed" || doc.status === "completed";
+    const isSignedOrCompleted =
+      doc.status === "signed" || doc.status === "completed";
     if (!isSignedOrCompleted) return false;
-    
+
     return Object.values({
       title: doc.title || "",
       description: doc.description || "",
@@ -650,15 +682,46 @@ export default function DashboardPage() {
       <Card>
         <CardHeader>
           <CardTitle>Recent Documents</CardTitle>
-          <div className="mt-4">
-            <br></br>
-            <Input
-              type="text"
-              placeholder="Search documents..."
-              value={documentSearchQuery}
-              onChange={(e) => setDocumentSearchQuery(e.target.value)}
-              className="max-w-sm"
-            />
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-wrap gap-2 mt-2">
+              {STATUS_FILTERS.map((filter) => (
+                <Button
+                  key={filter.value}
+                  variant="outline"
+                  size="sm"
+                  className={`${
+                    selectedStatus === filter.value
+                      ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                      : "hover:bg-muted"
+                  }`}
+                  onClick={() => setSelectedStatus(filter.value)}
+                >
+                  {filter.value !== "all" && (
+                    <span
+                      className={`mr-2 h-2 w-2 rounded-full ${
+                        filter.value === "draft"
+                          ? "bg-yellow-500"
+                          : filter.value === "pending_signature"
+                            ? "bg-blue-500"
+                            : filter.value === "completed"
+                              ? "bg-green-500"
+                              : "bg-gray-500"
+                      }`}
+                    />
+                  )}
+                  {filter.label}
+                </Button>
+              ))}
+            </div>
+            <div>
+              <Input
+                type="text"
+                placeholder="Search documents..."
+                value={documentSearchQuery}
+                onChange={(e) => setDocumentSearchQuery(e.target.value)}
+                className="max-w-sm"
+              />
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -684,13 +747,23 @@ export default function DashboardPage() {
                     <span
                       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                         doc.status === "draft"
-                          ? "bg-yellow-100 text-yellow-800"
-                          : doc.status === "signed"
-                            ? "bg-green-100 text-green-800"
-                            : "bg-gray-100 text-gray-800"
+                          ? "bg-yellow-100 text-yellow-800 border border-yellow-200"
+                          : doc.status === "completed" ||
+                              doc.status === "signed"
+                            ? "bg-green-100 text-green-800 border border-green-200"
+                            : doc.status === "pending_signature"
+                              ? "bg-blue-100 text-blue-800 border border-blue-200"
+                              : "bg-gray-100 text-gray-800 border border-gray-200"
                       }`}
                     >
-                      {doc.status || "draft"}
+                      {doc.status === "pending_signature"
+                        ? "Pending Signature"
+                        : doc.status === "draft"
+                          ? "Draft"
+                          : doc.status === "completed" ||
+                              doc.status === "signed"
+                            ? "Completed"
+                            : doc.status}
                     </span>
                   </TableCell>
                   <TableCell>
