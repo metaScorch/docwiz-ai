@@ -56,6 +56,7 @@ const PartiesDialog = ({
   searchQuery,
   onSearchChange,
   formatRelativeTime,
+  router
 }) => (
   <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent className="max-w-[900px] max-h-[80vh]">
@@ -118,6 +119,7 @@ const PartiesDialog = ({
                         <TableHead>Status</TableHead>
                         <TableHead>Created</TableHead>
                         <TableHead>Last Updated</TableHead>
+                        <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -152,6 +154,15 @@ const PartiesDialog = ({
                           </TableCell>
                           <TableCell>
                             {formatRelativeTime(doc.updated_at)}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => router.push(`/editor/document/${doc.id}`)}
+                            >
+                              {doc.status === "draft" ? "Edit" : "View"}
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -480,15 +491,32 @@ export default function DashboardPage() {
             <DropdownMenuItem
               onClick={async () => {
                 try {
-                  const response = await fetch("/api/create-billing-portal", {
-                    method: "POST",
-                  });
-                  const { session_url, error } = await response.json();
+                  // Check subscription status directly from database
+                  const { data: subscription } = await supabase
+                    .from("subscriptions")
+                    .select("status, stripe_subscription_id")
+                    .eq("registration_id", registrations[0]?.id) // Assuming the first registration
+                    .single();
 
-                  if (error) throw new Error(error);
-                  window.location.href = session_url;
+                  if (
+                    subscription?.status === "active" &&
+                    subscription?.stripe_subscription_id
+                  ) {
+                    // If subscribed, open customer portal
+                    const response = await fetch("/api/create-billing-portal", {
+                      method: "POST",
+                    });
+                    const { session_url, error } = await response.json();
+                    if (error) throw new Error(error);
+                    window.location.href = session_url;
+                  } else {
+                    // If not subscribed, open pricing page
+                    router.push("/pricing");
+                  }
                 } catch (error) {
-                  console.error("Error opening billing portal:", error);
+                  console.error("Error handling billing:", error);
+                  // If any error occurs, redirect to pricing page
+                  router.push("/pricing");
                 }
               }}
             >
@@ -813,6 +841,7 @@ export default function DashboardPage() {
         searchQuery={partySearchQuery}
         onSearchChange={setPartySearchQuery}
         formatRelativeTime={formatRelativeTime}
+        router={router}
       />
 
       <SignedDocumentsDialog
