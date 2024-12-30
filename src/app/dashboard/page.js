@@ -56,7 +56,7 @@ const PartiesDialog = ({
   searchQuery,
   onSearchChange,
   formatRelativeTime,
-  router
+  router,
 }) => (
   <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent className="max-w-[900px] max-h-[80vh]">
@@ -159,7 +159,9 @@ const PartiesDialog = ({
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => router.push(`/editor/document/${doc.id}`)}
+                              onClick={() =>
+                                router.push(`/editor/document/${doc.id}`)
+                              }
                             >
                               {doc.status === "draft" ? "Edit" : "View"}
                             </Button>
@@ -354,7 +356,7 @@ export default function DashboardPage() {
     }
 
     fetchData();
-  }, []);
+  }, [supabase]);
 
   const fetchTemplates = async () => {
     setLoadingTemplates(true);

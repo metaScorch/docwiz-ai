@@ -71,7 +71,7 @@ export default function EditorPage({ params }) {
     }
 
     fetchDocument();
-  }, [documentId, supabase]);
+  }, [documentId, supabase, router]);
 
   useEffect(() => {
     const intervalId = setInterval(() => {
@@ -79,7 +79,7 @@ export default function EditorPage({ params }) {
     }, 60000);
 
     return () => clearInterval(intervalId);
-  }, []);
+  }, [router]);
 
   const handleContentChange = async (newContent) => {
     const newTimestamp = new Date().toISOString();

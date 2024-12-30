@@ -22,13 +22,15 @@ export default function SignIn() {
   useEffect(() => {
     const checkSession = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
         if (session) {
-          router.push('/dashboard');
-          toast.info('Already signed in');
+          router.push("/dashboard");
+          toast.info("Already signed in");
         }
       } catch (error) {
-        console.error('Error checking session:', error);
+        console.error("Error checking session:", error);
       }
     };
 
@@ -122,7 +124,7 @@ export default function SignIn() {
             </Button>
 
             <div className="text-center text-sm text-gray-500">
-              Don't have an account?{" "}
+              Don&apos;t have an account?{" "}
               <Link href="/register" className="text-blue-600 hover:underline">
                 Sign up
               </Link>
