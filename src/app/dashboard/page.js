@@ -31,6 +31,7 @@ import {
   isThisYear,
 } from "date-fns";
 import Image from "next/image";
+import { Wand2 } from "lucide-react";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -86,7 +87,7 @@ export default function DashboardPage() {
         setStats({
           totalDocuments: (documentsData || []).length,
           signedDocuments: (documentsData || []).filter(
-            (doc) => doc.status === "signed"
+            (doc) => doc.status === "completed"
           ).length,
           totalParties: registrationsData.reduce(
             (acc, doc) => acc + (doc.parties?.length || 0),
@@ -224,10 +225,13 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      <div className="flex space-x-4">
+      <div className="flex space-x-4 items-center">
         <Dialog>
           <DialogTrigger asChild>
-            <Button>Generate New Agreement</Button>
+            <Button className="bg-[#0700c7] text-white hover:bg-[#0700c7]/90">
+              <Wand2 className="mr-1 h-4 w-2" />
+              Generate Agreement Using AI
+            </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
@@ -236,11 +240,15 @@ export default function DashboardPage() {
             <NewAgreementForm />
           </DialogContent>
         </Dialog>
-
+        <div className="text-muted-foreground">or</div>
         <Dialog>
           <DialogTrigger asChild>
-            <Button variant="secondary" onClick={fetchTemplates}>
-              Select Template
+            <Button
+              variant="outline"
+              className="bg-white text-[#0700c7] border-[#0700c7] hover:bg-[#0700c7]/10"
+              onClick={fetchTemplates}
+            >
+              Select A Template
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-[900px] max-h-[80vh]">
