@@ -33,6 +33,13 @@ import {
 import Image from "next/image";
 import { Wand2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { UserCircle } from "lucide-react";
 
 // Define PartiesDialog as a separate component
 const PartiesDialog = ({
@@ -327,8 +334,8 @@ export default function DashboardPage() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      {/* Logo Section */}
-      <div className="flex justify-start mb-8">
+      {/* Logo and Account Section */}
+      <div className="flex justify-between items-center mb-8">
         <Image
           src="/logo.png"
           alt="DocWiz Logo"
@@ -337,6 +344,32 @@ export default function DashboardPage() {
           priority
           className="h-auto"
         />
+        
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="flex items-center gap-2">
+              <UserCircle className="h-5 w-5" />
+              My Account
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem onClick={() => router.push('/profile')}>
+              Profile
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => router.push('/billing')}>
+              Billing
+            </DropdownMenuItem>
+            <DropdownMenuItem 
+              onClick={async () => {
+                await supabase.auth.signOut();
+                router.push('/login');
+              }}
+              className="text-red-600"
+            >
+              Logout
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Stats Section */}
