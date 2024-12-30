@@ -140,6 +140,9 @@ Example: I need a non-disclosure agreement for a freelance developer who will be
             value={[complexity]}
             onValueChange={([value]) => setComplexity(value)}
             className="w-full"
+            style={{
+              "--slider-color": "#0700c7"
+            }}
           />
           <p className="text-sm text-muted-foreground">{getComplexityLabel(complexity)}</p>
         </div>
@@ -153,6 +156,9 @@ Example: I need a non-disclosure agreement for a freelance developer who will be
             value={[length]}
             onValueChange={([value]) => setLength(value)}
             className="w-full"
+            style={{
+              "--slider-color": "#0700c7"
+            }}
           />
           <p className="text-sm text-muted-foreground">{getLengthLabel(length)}</p>
         </div>
