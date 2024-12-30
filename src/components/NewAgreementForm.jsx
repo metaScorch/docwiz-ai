@@ -41,11 +41,9 @@ export function NewAgreementForm() {
     setLoading(true);
 
     try {
-      // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      // Generate agreement using AI
       const response = await fetch('/api/generate-agreement', {
         method: 'POST',
         headers: {
@@ -61,22 +59,8 @@ export function NewAgreementForm() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
 
-      // Create new document
-      const { data: newDocument, error } = await supabase
-        .from('user_documents')
-        .insert([{
-          user_id: user.id,
-          content: data.content,
-          title: data.title,
-          status: 'draft'
-        }])
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Redirect to editor
-      router.push(`/editor/document/${newDocument.id}`);
+      // Just redirect to the document created by the API
+      router.push(`/editor/document/${data.id}`);
     } catch (error) {
       console.error('Error:', error);
       // Add error handling/notification here
