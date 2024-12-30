@@ -20,7 +20,8 @@ const supabase = createClient(
 
 export async function POST(req) {
   try {
-    const { prompt, userId, jurisdiction } = await req.json();
+    const { prompt, userId, jurisdiction, complexity, length } =
+      await req.json();
 
     if (!userId || !jurisdiction) {
       return NextResponse.json(
@@ -28,6 +29,24 @@ export async function POST(req) {
         { status: 400 }
       );
     }
+
+    // Define word count ranges based on length parameter
+    const wordCountRanges = {
+      1: { min: 300, max: 500 },
+      2: { min: 600, max: 1000 },
+      3: { min: 1200, max: 2000 },
+      4: { min: 2500, max: 3500 },
+      5: { min: 4000, max: 6000 },
+    };
+
+    // Define complexity descriptions
+    const complexityLevels = {
+      1: "Use simple, everyday language with minimal legal terms.",
+      2: "Use basic legal terms with clear explanations.",
+      3: "Use standard legal language balanced with clarity.",
+      4: "Use detailed legal terminology with proper context.",
+      5: "Use comprehensive legal language with technical precision.",
+    };
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o",
@@ -53,7 +72,11 @@ export async function POST(req) {
 
 Ensure the "signer" field is only included when required for identifying signing parties' names. Exclude it for all other placeholders, including signature fields.
 
-The output must be valid JSON and strictly adhere to the described format.`,
+The output must be valid JSON and strictly adhere to the described format.
+
+Additional Requirements:
+- The document should be between ${wordCountRanges[length].min} and ${wordCountRanges[length].max} words.
+- Complexity Level: ${complexityLevels[complexity]}`,
         },
         {
           role: "user",
@@ -67,7 +90,10 @@ The output must be valid JSON and strictly adhere to the described format.`,
     let parsedResponse;
 
     try {
-      const cleanedResponse = response.trim().replace(/[\n\r]/g, " ");
+      const cleanedResponse = response
+        .trim()
+        .replace(/[\n\r]/g, " ")
+        .replace(/^```json\s*|\s*```$/g, "");
       parsedResponse = JSON.parse(cleanedResponse);
 
       // Validate and restructure the response
