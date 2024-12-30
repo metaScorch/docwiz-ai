@@ -6,6 +6,7 @@ import { Wand2 } from "lucide-react"; // Import the magic wand icon
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { Select } from "@/components/ui/select";
 import { JurisdictionSearch } from "@/components/JurisdictionSearch";
+import { Slider } from "@/components/ui/slider";
 
 export function NewAgreementForm() {
   const router = useRouter();
@@ -14,6 +15,8 @@ export function NewAgreementForm() {
   const [loading, setLoading] = useState(false);
   const [jurisdiction, setJurisdiction] = useState("");
   const [userRegistration, setUserRegistration] = useState(null);
+  const [complexity, setComplexity] = useState(3);
+  const [length, setLength] = useState(3);
 
   useEffect(() => {
     const fetchUserRegistration = async () => {
@@ -52,7 +55,9 @@ export function NewAgreementForm() {
         body: JSON.stringify({
           prompt,
           userId: user.id,
-          jurisdiction
+          jurisdiction,
+          complexity,
+          length
         }),
       });
 
@@ -67,6 +72,28 @@ export function NewAgreementForm() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const getComplexityLabel = (value) => {
+    const labels = {
+      1: "Simple, easy to understand",
+      2: "Basic legal terms",
+      3: "Standard legal language",
+      4: "Detailed legal terminology",
+      5: "Complex legal language"
+    };
+    return labels[value];
+  };
+
+  const getLengthLabel = (value) => {
+    const labels = {
+      1: "Very brief",
+      2: "Concise",
+      3: "Standard",
+      4: "Detailed",
+      5: "Comprehensive"
+    };
+    return labels[value];
   };
 
   return (
@@ -102,6 +129,33 @@ Example: I need a non-disclosure agreement for a freelance developer who will be
             Default jurisdiction based on your registration
           </p>
         )}
+      </div>
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <label className="text-sm text-muted-foreground">Wording Complexity</label>
+          <Slider
+            min={1}
+            max={5}
+            step={1}
+            value={[complexity]}
+            onValueChange={([value]) => setComplexity(value)}
+            className="w-full"
+          />
+          <p className="text-sm text-muted-foreground">{getComplexityLabel(complexity)}</p>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm text-muted-foreground">Agreement Length</label>
+          <Slider
+            min={1}
+            max={5}
+            step={1}
+            value={[length]}
+            onValueChange={([value]) => setLength(value)}
+            className="w-full"
+          />
+          <p className="text-sm text-muted-foreground">{getLengthLabel(length)}</p>
+        </div>
       </div>
       <Button type="submit" className="w-full" disabled={loading}>
         {loading ? "Generating..." : "Generate Agreement"}

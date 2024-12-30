@@ -20,7 +20,8 @@ const supabase = createClient(
 
 export async function POST(req) {
   try {
-    const { prompt, userId, jurisdiction } = await req.json();
+    const { prompt, userId, jurisdiction, complexity, length } =
+      await req.json();
 
     if (!userId || !jurisdiction) {
       return NextResponse.json(
@@ -57,7 +58,10 @@ The output must be valid JSON and strictly adhere to the described format.`,
         },
         {
           role: "user",
-          content: `Generate a legal agreement for the following jurisdiction: ${jurisdiction}. Request: ${prompt}`,
+          content: `Generate a legal agreement for the following jurisdiction: ${jurisdiction}. 
+Complexity level: ${complexity}/5 (where 1 is simple and 5 is very complex legal language).
+Length level: ${length}/5 (where 1 is very brief and 5 is very comprehensive and lengthy).
+Request: ${prompt}`,
         },
       ],
       temperature: 0.3,
