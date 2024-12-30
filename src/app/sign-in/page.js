@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Mail, Lock } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 
 export default function SignIn() {
   const router = useRouter();
@@ -53,9 +54,18 @@ export default function SignIn() {
     <div className="min-h-screen bg-gradient-to-r from-blue-100 to-purple-100 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle className="text-2xl font-bold text-center">
-            Sign In
-          </CardTitle>
+          <div className="flex flex-col space-y-4">
+            <div className="self-center">
+              <Image
+                src="/logo.png"
+                alt="DocWiz Logo"
+                width={120}
+                height={40}
+                priority
+              />
+            </div>
+            <CardTitle className="text-xl">Sign In</CardTitle>
+          </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSignIn} className="space-y-4">

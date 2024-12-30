@@ -144,6 +144,95 @@ const PartiesDialog = ({
   </Dialog>
 );
 
+// Add new SignedDocumentsDialog component after PartiesDialog
+const SignedDocumentsDialog = ({
+  open,
+  onOpenChange,
+  documents,
+  searchQuery,
+  onSearchChange,
+  formatRelativeTime,
+}) => {
+  const getSignedDocumentUrl = (document) => {
+    try {
+      // Access the signedPdfUrl from the document column
+      return document.document?.signedPdfUrl || document.document?.originalPdf;
+    } catch (error) {
+      console.error("Error getting signed document URL:", error);
+      return null;
+    }
+  };
+
+  const handleViewDocument = (doc) => {
+    const url = getSignedDocumentUrl(doc);
+    if (url) {
+      window.open(url, '_blank');
+    } else {
+      console.error('No signed document URL found');
+      // Optionally show an error message to the user
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-[900px] max-h-[80vh]">
+        <DialogHeader>
+          <DialogTitle>Signed Documents</DialogTitle>
+          <div className="mt-4">
+            <Input
+              type="text"
+              placeholder="Search by title or description..."
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="max-w-sm"
+            />
+          </div>
+        </DialogHeader>
+        <ScrollArea className="h-[60vh]">
+          {documents.length === 0 ? (
+            <div className="text-center text-muted-foreground py-8">
+              No signed documents found matching your search.
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Document Title</TableHead>
+                  <TableHead>Template</TableHead>
+                  <TableHead>Created</TableHead>
+                  <TableHead>Signed Date</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {documents.map((doc) => (
+                  <TableRow key={doc.id}>
+                    <TableCell className="font-medium">{doc.title}</TableCell>
+                    <TableCell>
+                      {doc.template?.template_name || "Custom Document"}
+                    </TableCell>
+                    <TableCell>{formatRelativeTime(doc.created_at)}</TableCell>
+                    <TableCell>{formatRelativeTime(doc.updated_at)}</TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleViewDocument(doc)}
+                      >
+                        View
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 export default function DashboardPage() {
   const router = useRouter();
   const supabase = createClientComponentClient();
@@ -162,6 +251,8 @@ export default function DashboardPage() {
   const [uniqueParties, setUniqueParties] = useState([]);
   const [showPartiesDialog, setShowPartiesDialog] = useState(false);
   const [partySearchQuery, setPartySearchQuery] = useState("");
+  const [showSignedDocsDialog, setShowSignedDocsDialog] = useState(false);
+  const [signedDocsSearchQuery, setSignedDocsSearchQuery] = useState("");
 
   useEffect(() => {
     async function fetchData() {
@@ -324,6 +415,18 @@ export default function DashboardPage() {
     );
   });
 
+  const filteredSignedDocuments = userDocuments.filter((doc) => {
+    const isSignedOrCompleted = doc.status === "signed" || doc.status === "completed";
+    if (!isSignedOrCompleted) return false;
+    
+    return Object.values({
+      title: doc.title || "",
+      description: doc.description || "",
+    }).some((value) =>
+      value.toLowerCase().includes(signedDocsSearchQuery.toLowerCase())
+    );
+  });
+
   if (loading) {
     return (
       <div className="container mx-auto p-6">
@@ -344,7 +447,7 @@ export default function DashboardPage() {
           priority
           className="h-auto"
         />
-        
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="flex items-center gap-2">
@@ -353,16 +456,16 @@ export default function DashboardPage() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={() => router.push('/profile')}>
+            <DropdownMenuItem onClick={() => router.push("/profile")}>
               Profile
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => router.push('/billing')}>
+            <DropdownMenuItem onClick={() => router.push("/billing")}>
               Billing
             </DropdownMenuItem>
-            <DropdownMenuItem 
+            <DropdownMenuItem
               onClick={async () => {
                 await supabase.auth.signOut();
-                router.push('/login');
+                router.push("/sign-in");
               }}
               className="text-red-600"
             >
@@ -385,13 +488,21 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader
+            className="flex flex-row items-center justify-between space-y-0 pb-2 cursor-pointer"
+            onClick={() => setShowSignedDocsDialog(true)}
+          >
             <CardTitle className="text-sm font-medium">
               Signed Documents
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.signedDocuments}</div>
+            <div
+              className="text-2xl font-bold cursor-pointer"
+              onClick={() => setShowSignedDocsDialog(true)}
+            >
+              {stats.signedDocuments}
+            </div>
           </CardContent>
         </Card>
         <Card>
@@ -628,6 +739,15 @@ export default function DashboardPage() {
         parties={filteredParties}
         searchQuery={partySearchQuery}
         onSearchChange={setPartySearchQuery}
+        formatRelativeTime={formatRelativeTime}
+      />
+
+      <SignedDocumentsDialog
+        open={showSignedDocsDialog}
+        onOpenChange={setShowSignedDocsDialog}
+        documents={filteredSignedDocuments}
+        searchQuery={signedDocsSearchQuery}
+        onSearchChange={setSignedDocsSearchQuery}
         formatRelativeTime={formatRelativeTime}
       />
     </div>
