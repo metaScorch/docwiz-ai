@@ -32,6 +32,110 @@ import {
 } from "date-fns";
 import Image from "next/image";
 import { Wand2 } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+
+// Define PartiesDialog as a separate component
+const PartiesDialog = ({
+  open,
+  onOpenChange,
+  parties,
+  searchQuery,
+  onSearchChange,
+  formatRelativeTime,
+}) => (
+  <Dialog open={open} onOpenChange={onOpenChange}>
+    <DialogContent className="max-w-[900px] max-h-[80vh]">
+      <DialogHeader>
+        <DialogTitle>Document Parties</DialogTitle>
+        <div className="mt-4">
+          <Input
+            type="text"
+            placeholder="Search by name, email, or document title..."
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+            className="max-w-sm"
+          />
+        </div>
+      </DialogHeader>
+      <ScrollArea className="h-[60vh]">
+        {parties.length === 0 ? (
+          <div className="text-center text-muted-foreground py-8">
+            No parties found matching your search.
+          </div>
+        ) : (
+          parties.map((party) => (
+            <Card key={party.email} className="mb-4">
+              <CardHeader>
+                <CardTitle className="text-lg">
+                  {party.name} ({party.email})
+                </CardTitle>
+                <div className="text-sm text-muted-foreground">
+                  Total Documents: {party.documents.length}
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex gap-4">
+                    {["draft", "pending_signature", "completed"].map(
+                      (status) => (
+                        <div key={status} className="text-sm">
+                          <div className="font-medium capitalize">{status}</div>
+                          <div>
+                            {
+                              party.documents.filter(
+                                (doc) => doc.status === status
+                              ).length
+                            }
+                          </div>
+                        </div>
+                      )
+                    )}
+                  </div>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Document</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Created</TableHead>
+                        <TableHead>Last Updated</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {party.documents.map((doc) => (
+                        <TableRow key={doc.id}>
+                          <TableCell>{doc.title}</TableCell>
+                          <TableCell>
+                            <span
+                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                doc.status === "draft"
+                                  ? "bg-yellow-100 text-yellow-800"
+                                  : doc.status === "completed"
+                                    ? "bg-green-100 text-green-800"
+                                    : "bg-gray-100 text-gray-800"
+                              }`}
+                            >
+                              {doc.status}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            {formatRelativeTime(doc.created_at)}
+                          </TableCell>
+                          <TableCell>
+                            {formatRelativeTime(doc.updated_at)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </ScrollArea>
+    </DialogContent>
+  </Dialog>
+);
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -48,6 +152,9 @@ export default function DashboardPage() {
   const [templateSearchQuery, setTemplateSearchQuery] = useState("");
   const [userDocuments, setUserDocuments] = useState([]);
   const [documentSearchQuery, setDocumentSearchQuery] = useState("");
+  const [uniqueParties, setUniqueParties] = useState([]);
+  const [showPartiesDialog, setShowPartiesDialog] = useState(false);
+  const [partySearchQuery, setPartySearchQuery] = useState("");
 
   useEffect(() => {
     async function fetchData() {
@@ -83,16 +190,42 @@ export default function DashboardPage() {
         if (documentsError) throw documentsError;
         setUserDocuments(documentsData || []);
 
-        // Calculate stats
+        // Process documents to extract unique parties and count documents
+        const parties = new Map();
+        let totalDocs = documentsData.length;
+        let signedDocs = 0;
+
+        documentsData.forEach((doc) => {
+          // Count signed/completed documents
+          if (doc.status === "completed" || doc.status === "signed") {
+            signedDocs++;
+          }
+
+          const signers = doc.document?.signers || [];
+          signers.forEach((signer) => {
+            if (!parties.has(signer.email)) {
+              parties.set(signer.email, {
+                name: signer.name,
+                email: signer.email,
+                documents: [],
+              });
+            }
+
+            parties.get(signer.email).documents.push({
+              id: doc.id,
+              title: doc.title,
+              status: doc.status,
+              created_at: doc.created_at,
+              updated_at: doc.updated_at,
+            });
+          });
+        });
+
+        setUniqueParties(Array.from(parties.values()));
         setStats({
-          totalDocuments: (documentsData || []).length,
-          signedDocuments: (documentsData || []).filter(
-            (doc) => doc.status === "completed"
-          ).length,
-          totalParties: registrationsData.reduce(
-            (acc, doc) => acc + (doc.parties?.length || 0),
-            0
-          ),
+          totalDocuments: totalDocs,
+          signedDocuments: signedDocs,
+          totalParties: parties.size,
         });
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -171,6 +304,19 @@ export default function DashboardPage() {
     )
   );
 
+  const filteredParties = uniqueParties.filter((party) => {
+    const searchTerm = partySearchQuery.toLowerCase();
+    if (
+      party.name.toLowerCase().includes(searchTerm) ||
+      party.email.toLowerCase().includes(searchTerm)
+    ) {
+      return true;
+    }
+    return party.documents.some((doc) =>
+      doc.title.toLowerCase().includes(searchTerm)
+    );
+  });
+
   if (loading) {
     return (
       <div className="container mx-auto p-6">
@@ -216,11 +362,19 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader
+            className="flex flex-row items-center justify-between space-y-0 pb-2 cursor-pointer"
+            onClick={() => setShowPartiesDialog(true)}
+          >
             <CardTitle className="text-sm font-medium">Total Parties</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalParties}</div>
+            <div
+              className="text-2xl font-bold cursor-pointer"
+              onClick={() => setShowPartiesDialog(true)}
+            >
+              {stats.totalParties}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -434,6 +588,15 @@ export default function DashboardPage() {
           </Table>
         </CardContent>
       </Card>
+
+      <PartiesDialog
+        open={showPartiesDialog}
+        onOpenChange={setShowPartiesDialog}
+        parties={filteredParties}
+        searchQuery={partySearchQuery}
+        onSearchChange={setPartySearchQuery}
+        formatRelativeTime={formatRelativeTime}
+      />
     </div>
   );
 }
