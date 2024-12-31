@@ -11,7 +11,7 @@ export default function SuggestionPopup({ position, onSubmit, onClose }) {
     e.preventDefault();
     setIsLoading(true);
     try {
-      await onSubmit(prompt);
+      await onSubmit(prompt, true);
     } finally {
       setIsLoading(false);
       setPrompt("");

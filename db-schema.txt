@@ -470,6 +470,32 @@
     "foreign_column_name": "id"
   },
   {
+    "table_name": "templates",
+    "column_name": "placeholder_values",
+    "ordinal_position": 9,
+    "is_nullable": "YES",
+    "data_type": "jsonb",
+    "character_maximum_length": null,
+    "numeric_precision": null,
+    "numeric_scale": null,
+    "constraint_type": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "templates",
+    "column_name": "ai_gen_template",
+    "ordinal_position": 10,
+    "is_nullable": "YES",
+    "data_type": "boolean",
+    "character_maximum_length": null,
+    "numeric_precision": null,
+    "numeric_scale": null,
+    "constraint_type": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
     "table_name": "user_documents",
     "column_name": "id",
     "ordinal_position": 1,

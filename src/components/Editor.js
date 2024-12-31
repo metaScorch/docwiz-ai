@@ -314,11 +314,12 @@ export default function Editor({
   };
 
   // AI improvement handling
-  const handleSuggestionSubmit = async (prompt) => {
+  const handleSuggestionSubmit = async (prompt, shouldFormat = false) => {
     if (!selection) return;
 
     setIsProcessing(true);
     try {
+      // First, improve the selected text
       const response = await fetch("/api/improve-text", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -332,12 +333,42 @@ export default function Editor({
       const data = await response.json();
       if (data.error) throw new Error(data.error);
 
-      setPreviewChanges({
-        originalText: selection.text,
-        newText: data.improvedText,
-        from: selection.from,
-        to: selection.to,
-      });
+      // If formatting is requested, process the entire document
+      if (shouldFormat) {
+        const updatedContent =
+          editor.state.doc.textBetween(0, selection.from) +
+          data.improvedText +
+          editor.state.doc.textBetween(
+            selection.to,
+            editor.state.doc.content.size
+          );
+
+        const formatResponse = await fetch("/api/improve-formatting", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content: updatedContent,
+          }),
+        });
+
+        const formatData = await formatResponse.json();
+        if (formatData.error) throw new Error(formatData.error);
+
+        setPreviewChanges({
+          originalText: selection.text,
+          newText: data.improvedText,
+          from: selection.from,
+          to: selection.to,
+          formattedDocument: formatData.formattedContent,
+        });
+      } else {
+        setPreviewChanges({
+          originalText: selection.text,
+          newText: data.improvedText,
+          from: selection.from,
+          to: selection.to,
+        });
+      }
 
       setPopupPosition(null);
     } catch (error) {
@@ -350,13 +381,19 @@ export default function Editor({
   const handleAcceptChanges = () => {
     if (!previewChanges) return;
 
-    editor
-      .chain()
-      .focus()
-      .setTextSelection({ from: previewChanges.from, to: previewChanges.to })
-      .deleteSelection()
-      .insertContent(previewChanges.newText)
-      .run();
+    if (previewChanges.formattedDocument) {
+      // If we have a formatted version, use the entire document
+      editor.commands.setContent(previewChanges.formattedDocument);
+    } else {
+      // Otherwise just replace the selected portion
+      editor
+        .chain()
+        .focus()
+        .setTextSelection({ from: previewChanges.from, to: previewChanges.to })
+        .deleteSelection()
+        .insertContent(previewChanges.newText)
+        .run();
+    }
 
     setPreviewChanges(null);
     setSelection(null);

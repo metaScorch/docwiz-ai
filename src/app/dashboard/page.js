@@ -40,6 +40,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { UserCircle } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 const STATUS_FILTERS = [
   { value: "all", label: "All" },
@@ -364,6 +365,7 @@ export default function DashboardPage() {
       const { data, error } = await supabase
         .from("templates")
         .select("*")
+        .eq("ai_gen_template", true)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -460,8 +462,8 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="container mx-auto p-6">
-        <h1 className="text-2xl font-bold mb-4">Loading...</h1>
+      <div className="container mx-auto p-6 flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -614,7 +616,7 @@ export default function DashboardPage() {
           <DialogContent className="max-w-[900px] max-h-[80vh]">
             <DialogHeader>
               <DialogTitle className="text-xl mb-4">
-                Select a Template
+                Select an AI-Generated Template
               </DialogTitle>
               <div className="mb-4">
                 <Input
@@ -628,7 +630,7 @@ export default function DashboardPage() {
             </DialogHeader>
             {loadingTemplates ? (
               <div className="flex items-center justify-center py-8">
-                Loading templates...
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
             ) : (
               <div className="overflow-y-auto max-h-[60vh]">
@@ -647,7 +649,20 @@ export default function DashboardPage() {
                         <TableCell className="font-medium">
                           {template.template_name}
                         </TableCell>
-                        <TableCell>{template.ideal_for}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {JSON.parse(template.ideal_for).map(
+                              (tag, index) => (
+                                <span
+                                  key={index}
+                                  className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                                >
+                                  {tag}
+                                </span>
+                              )
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell>
                           <div className="max-h-[100px] overflow-y-auto pr-4">
                             {template.description}
