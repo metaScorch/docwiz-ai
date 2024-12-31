@@ -17,6 +17,7 @@ export function NewAgreementForm() {
   const [userRegistration, setUserRegistration] = useState(null);
   const [complexity, setComplexity] = useState(3);
   const [length, setLength] = useState(3);
+  const [jurisdictionError, setJurisdictionError] = useState(false);
 
   useEffect(() => {
     const fetchUserRegistration = async () => {
@@ -41,6 +42,13 @@ export function NewAgreementForm() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Add jurisdiction validation
+    if (!jurisdiction) {
+      setJurisdictionError(true);
+      return;
+    }
+    setJurisdictionError(false);
     setLoading(true);
 
     try {
@@ -115,15 +123,22 @@ Example: I need a non-disclosure agreement for a freelance developer who will be
         </p>
       </div>
       <div className="space-y-2">
-        <label className="text-sm text-muted-foreground">Jurisdiction</label>
+        <label className="text-sm text-muted-foreground">
+          Jurisdiction <span className="text-red-500">*</span>
+        </label>
         <JurisdictionSearch
           value={jurisdiction}
           onChange={setJurisdiction}
           defaultValue={userRegistration ? 
             `${userRegistration.city_name}, ${userRegistration.state_name}, ${userRegistration.country_name}` : 
-            undefined
+            "Select jurisdiction"
           }
         />
+        {jurisdictionError && (
+          <p className="text-sm text-red-500">
+            Please select a jurisdiction
+          </p>
+        )}
         {userRegistration && (
           <p className="text-sm text-muted-foreground">
             Default jurisdiction based on your registration

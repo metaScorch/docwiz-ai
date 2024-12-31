@@ -387,8 +387,15 @@ export default function Editor({
   useEffect(() => {
     if (editor && content && documentValues) {
       const processedContent = replaceContentPlaceholders(content);
+      // Only update if the content is actually different
       if (processedContent !== editor.getHTML()) {
+        // Store current selection
+        const { from, to } = editor.state.selection;
+
         editor.commands.setContent(processedContent, false);
+
+        // Restore selection
+        editor.commands.setTextSelection({ from, to });
       }
     }
   }, [documentValues, content, editor, replaceContentPlaceholders]);

@@ -164,7 +164,7 @@ export default function PricingPage() {
       console.log("6. Stripe loaded, redirecting to checkout...");
 
       const result = await stripe.redirectToCheckout({
-        sessionId: sessionId
+        sessionId: sessionId,
       });
 
       if (result.error) {
@@ -178,14 +178,16 @@ export default function PricingPage() {
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex justify-between items-center mb-8">
-        <Image
-          src="/logo.png"
-          alt="DocWiz Logo"
-          width={180}
-          height={60}
-          priority
-          className="h-auto"
-        />
+        <Link href="/dashboard">
+          <Image
+            src="/logo.png"
+            alt="DocWiz Logo"
+            width={180}
+            height={60}
+            priority
+            className="h-auto"
+          />
+        </Link>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -285,7 +287,7 @@ export default function PricingPage() {
                   </span>
                   {plan.period !== "" && (
                     <span className="text-sm font-semibold leading-6 tracking-wide text-muted-foreground">
-                      / {plan.period}
+                      {isMonthly ? `/ ${plan.period}` : "/ year"}
                     </span>
                   )}
                 </p>
