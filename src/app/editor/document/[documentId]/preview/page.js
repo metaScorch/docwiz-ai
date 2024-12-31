@@ -37,29 +37,27 @@ export default function PreviewPage({ params }) {
 
       setDocument(document);
 
-      // Extract signers with their values
-      if (document.placeholder_values) {
-        console.log("Fetched placeholder values:", document.placeholder_values);
+      // Ensure placeholder_values is parsed if it's a string
+      const placeholderValues =
+        typeof document.placeholder_values === "string"
+          ? JSON.parse(document.placeholder_values)
+          : document.placeholder_values;
 
-        const signerFields = document.placeholder_values.filter((field) => {
-          const isSigner = field.signer === true;
-          if (isSigner) {
-            console.log("Found signer field:", field);
-          }
-          return isSigner;
-        });
+      if (Array.isArray(placeholderValues)) {
+        console.log("Fetched placeholder values:", placeholderValues);
 
+        // Find fields marked as signers
+        const signerFields = placeholderValues.filter(
+          (field) => field.signer === true
+        );
         console.log("Extracted signer fields:", signerFields);
+
         setSigners(signerFields);
 
-        // Initialize email state
+        // Initialize email state for signers
         const initialEmails = {};
         signerFields.forEach((signer) => {
-          initialEmails[signer.name] = signer.email || "";
-          console.log(
-            `Setting initial email for ${signer.name}:`,
-            signer.email || ""
-          );
+          initialEmails[signer.name] = ""; // Initialize empty email for each signer
         });
         setSignerEmails(initialEmails);
       }
