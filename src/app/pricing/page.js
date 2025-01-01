@@ -23,6 +23,7 @@ import { useRouter } from "next/navigation";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { Button } from "@/components/ui/button";
 import { loadStripe } from "@stripe/stripe-js";
+import { Loader2 } from "lucide-react";
 
 const STRIPE_PRICE_IDS = {
   UNLIMITED: {
@@ -95,15 +96,22 @@ export default function PricingPage() {
   const { isDesktop } = useWindowSize();
   const router = useRouter();
   const supabase = createClientComponentClient();
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleToggle = () => {
     setIsMonthly(!isMonthly);
   };
 
   const handleSubscription = async (plan) => {
+    if (plan.name === "ENTERPRISE") {
+      window.location.href = "mailto:hello@mydocwiz.com";
+      return;
+    }
+
     if (plan.name !== "UNLIMITED") return;
 
     try {
+      setIsLoading(true);
       console.log("1. Starting subscription process...");
 
       const {
@@ -122,14 +130,44 @@ export default function PricingPage() {
         .eq("user_id", session.user.id)
         .single();
 
-      if (registrationError || !registration?.stripe_customer_id) {
-        console.error("Registration error:", registrationError);
-        return;
+      let stripeCustomerId = registration?.stripe_customer_id;
+
+      // Create Stripe customer if it doesn't exist
+      if (!stripeCustomerId) {
+        console.log("3. No Stripe customer found, creating new customer");
+        const createCustomerResponse = await fetch(
+          "/api/create-stripe-customer",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              email: session.user.email,
+              userId: session.user.id,
+            }),
+          }
+        );
+
+        if (!createCustomerResponse.ok) {
+          throw new Error("Failed to create Stripe customer");
+        }
+
+        const { customerId } = await createCustomerResponse.json();
+        stripeCustomerId = customerId;
+
+        // Update registration with new Stripe customer ID
+        const { error: updateError } = await supabase
+          .from("registrations")
+          .update({ stripe_customer_id: customerId })
+          .eq("user_id", session.user.id);
+
+        if (updateError) {
+          throw new Error(
+            "Failed to update registration with Stripe customer ID"
+          );
+        }
       }
-      console.log(
-        "3. Found stripe_customer_id:",
-        registration.stripe_customer_id
-      );
 
       console.log(
         "4. Creating checkout session with price:",
@@ -143,7 +181,7 @@ export default function PricingPage() {
         },
         body: JSON.stringify({
           priceId: isMonthly ? plan.priceId.monthly : plan.priceId.yearly,
-          customerId: registration.stripe_customer_id,
+          customerId: stripeCustomerId,
         }),
       });
 
@@ -172,6 +210,8 @@ export default function PricingPage() {
       }
     } catch (error) {
       console.error("Error in subscription process:", error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -315,17 +355,26 @@ export default function PricingPage() {
 
                 <button
                   onClick={() => handleSubscription(plan)}
+                  disabled={isLoading}
                   className={cn(
                     buttonVariants({
                       variant: "outline",
                     }),
-                    "w-full",
+                    "w-full relative",
                     plan.isPopular
                       ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                      : ""
+                      : "",
+                    isLoading && "cursor-not-allowed opacity-50"
                   )}
                 >
-                  {plan.buttonText}
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin inline" />
+                      Please wait...
+                    </>
+                  ) : (
+                    plan.buttonText
+                  )}
                 </button>
                 <p className="mt-6 text-xs leading-5 text-muted-foreground">
                   {plan.description}
