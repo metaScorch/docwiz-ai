@@ -48,7 +48,7 @@ export default function SignIn() {
 
       if (error) {
         if (error.message === "Email not confirmed") {
-          router.push("/verify-email");
+          router.push(`/verify-email?email=${encodeURIComponent(email)}`);
           toast.info("Please verify your email before continuing.");
           return;
         }
