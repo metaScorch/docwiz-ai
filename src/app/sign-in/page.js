@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Mail, Lock } from "lucide-react";
+import { Mail, Lock, Loader2 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -18,10 +18,39 @@ export default function SignIn() {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isProcessingAuth, setIsProcessingAuth] = useState(true);
 
   useEffect(() => {
-    const checkSession = async () => {
+    const checkSessionAndHash = async () => {
       try {
+        setIsProcessingAuth(true);
+        // Check if there's a hash in the URL (access_token)
+        if (typeof window !== "undefined" && window.location.hash) {
+          const hashParams = new URLSearchParams(
+            window.location.hash.substring(1) // Remove the # character
+          );
+          const accessToken = hashParams.get("access_token");
+          const refreshToken = hashParams.get("refresh_token");
+
+          if (accessToken && refreshToken) {
+            // Set the session using the tokens
+            const { error } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+
+            if (error) throw error;
+
+            // Clear the hash from the URL
+            window.location.hash = "";
+
+            router.push("/dashboard");
+            toast.success("Email verified successfully!");
+            return;
+          }
+        }
+
+        // Regular session check
         const {
           data: { session },
         } = await supabase.auth.getSession();
@@ -31,11 +60,27 @@ export default function SignIn() {
         }
       } catch (error) {
         console.error("Error checking session:", error);
+        toast.error("Failed to authenticate");
+      } finally {
+        setIsProcessingAuth(false);
       }
     };
 
-    checkSession();
+    checkSessionAndHash();
   }, [router, supabase.auth]);
+
+  if (isProcessingAuth) {
+    return (
+      <div className="min-h-screen bg-gradient-to-r from-blue-100 to-purple-100 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="flex flex-col items-center justify-center p-8">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-500 mb-4" />
+            <p className="text-gray-600">Verifying your authentication...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   const handleSignIn = async (e) => {
     e.preventDefault();
