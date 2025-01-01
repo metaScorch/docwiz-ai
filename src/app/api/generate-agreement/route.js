@@ -58,7 +58,7 @@ export async function POST(req) {
 1. **Document Details**:
    - "title" (string): A concise name for the document.
    - "description" (string): A brief explanation of the document's purpose.
-   - "content" (string): The main body of the document written in Markdown format. Include placeholders for dynamic fields in the format "{{PLACEHOLDER_NAME}}" where appropriate.
+   - "content" (string): The main body of the document written in Markdown format. Include placeholders for dynamic fields in the format "{{PLACEHOLDER_NAME}}" where appropriate. DO NOT include any signature blocks or signature sections at the end of the document as these will be handled separately.
 
 2. **Placeholders**:
    - A list of all placeholders used in the "content" field. Each placeholder must be represented as an object with:
@@ -70,7 +70,7 @@ export async function POST(req) {
          - "pattern": Optional regex pattern for validation.
       - "signer" (boolean): **Optional**, include only if the placeholder represents a signing party's name.
 
-Ensure the "signer" field is only included when required for identifying signing parties' names. Exclude it for all other placeholders, including signature fields.
+Important: Do not include any signature blocks, signature lines, or signature sections in the document content. These will be handled separately by the system.
 
 The output must be valid JSON and strictly adhere to the described format.
 
