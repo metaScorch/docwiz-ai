@@ -42,19 +42,29 @@ export default function Timeline({ events }) {
     <Card className="p-6">
       <h2 className="text-xl font-semibold mb-4">Activity Timeline</h2>
       <div className="space-y-4">
-        {events.map((event, index) => (
-          <div key={index} className="flex gap-3">
-            <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center">
-              <span className="text-xl">{getEventIcon(event.event_type)}</span>
+        {events.length > 0 ? (
+          events.map((event, index) => (
+            <div key={index} className="flex gap-3">
+              <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center">
+                <span className="text-xl">
+                  {getEventIcon(event.event_type)}
+                </span>
+              </div>
+              <div className="flex-grow">
+                <p className="text-sm font-medium">
+                  {formatEventMessage(event)}
+                </p>
+                <time className="text-xs text-gray-500">
+                  {format(new Date(event.timestamp), "MMM d, yyyy 'at' h:mm a")}
+                </time>
+              </div>
             </div>
-            <div className="flex-grow">
-              <p className="text-sm font-medium">{formatEventMessage(event)}</p>
-              <time className="text-xs text-gray-500">
-                {format(new Date(event.timestamp), "MMM d, yyyy 'at' h:mm a")}
-              </time>
-            </div>
+          ))
+        ) : (
+          <div className="text-center text-muted-foreground py-4">
+            No activity yet. Nobody has viewed this document.
           </div>
-        ))}
+        )}
       </div>
     </Card>
   );

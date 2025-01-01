@@ -364,7 +364,7 @@ export default function DashboardPage() {
     try {
       const { data, error } = await supabase
         .from("templates")
-        .select("*")
+        .select("*, placeholder_values")
         .eq("ai_gen_template", true)
         .order("created_at", { ascending: false });
 
@@ -673,7 +673,6 @@ export default function DashboardPage() {
                             size="sm"
                             onClick={async () => {
                               try {
-                                // Get current user
                                 const {
                                   data: { user },
                                 } = await supabase.auth.getUser();
@@ -690,6 +689,8 @@ export default function DashboardPage() {
                                         content: template.content,
                                         title: template.template_name,
                                         status: "draft",
+                                        placeholder_values:
+                                          template.placeholder_values,
                                       },
                                     ])
                                     .select()
@@ -697,7 +698,6 @@ export default function DashboardPage() {
 
                                 if (error) throw error;
 
-                                // Redirect to editor with new document ID
                                 router.push(
                                   `/editor/document/${newDocument.id}`
                                 );
@@ -706,7 +706,6 @@ export default function DashboardPage() {
                                   "Error creating document:",
                                   error
                                 );
-                                // Add error handling/notification here
                               }
                             }}
                           >

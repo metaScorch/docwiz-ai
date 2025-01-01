@@ -8,6 +8,7 @@ import SigningStatus from "./components/SigningStatus";
 import Timeline from "./components/Timeline";
 import DocumentPreview from "./components/DocumentPreview";
 import { formatDistanceToNow } from "date-fns";
+import { Loader2 } from "lucide-react";
 
 export default function TrackingPage({ params }) {
   const documentId = use(params).documentId;
@@ -48,7 +49,11 @@ export default function TrackingPage({ params }) {
   }, [documentId, supabase]);
 
   if (loading) {
-    return <div className="container mx-auto p-6">Loading...</div>;
+    return (
+      <div className="container mx-auto p-6 flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
   }
 
   const documentData = document.document || {};

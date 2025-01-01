@@ -25,11 +25,18 @@ export default function PDFPreview({ content, placeholderValues }) {
 
     let processedText = content;
 
-    // Convert placeholderValues array to an object for easier lookup
-    const placeholderMap = placeholderValues.reduce((acc, item) => {
-      acc[item.name] = item;
-      return acc;
-    }, {});
+    // Ensure placeholderValues is an array and create the map
+    const placeholderMap = Array.isArray(placeholderValues)
+      ? placeholderValues.reduce((acc, item) => {
+          if (item && item.name) {
+            acc[item.name] = item;
+          }
+          return acc;
+        }, {})
+      : {};
+
+    console.log("placeholderValues:", placeholderValues); // Debug log
+    console.log("placeholderMap:", placeholderMap); // Debug log
 
     // First pass: replace placeholders with their values
     const regex = /\{\{([^}]+)\}\}/g;
