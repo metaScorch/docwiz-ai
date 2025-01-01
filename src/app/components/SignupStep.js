@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import Image from "next/image";
 
-export default function SignupStep({ onNext }) {
+export default function SignupStep({ onNext, onError }) {
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -17,32 +17,37 @@ export default function SignupStep({ onNext }) {
     try {
       setLoading(true);
 
-      // Check if user exists
-      const { data: existingUser } = await supabase
-        .from("profiles")
-        .select()
-        .eq("email", email)
-        .single();
+      // First check if the email exists
+      const {
+        data: { users },
+        error: signInError,
+      } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          shouldCreateUser: false, // This prevents creating a new user
+        },
+      });
 
-      if (existingUser) {
-        toast.error("An account with this email already exists");
+      // If no error, it means the email exists
+      if (!signInError) {
+        onError(
+          "This email is already registered. We've sent you a magic link to sign in. Check your email inbox."
+        );
         return;
       }
 
-      // If user doesn't exist, proceed with signup
+      // Proceed with signup if email doesn't exist
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          data: {
-            full_name: name,
-          },
+          data: { full_name: name },
         },
       });
 
       if (authError) throw authError;
 
-      // Create registration entry
+      // Only proceed with registration if user creation was successful
       const { data: registration, error: registrationError } = await supabase
         .from("registrations")
         .insert([
@@ -58,15 +63,17 @@ export default function SignupStep({ onNext }) {
 
       if (registrationError) throw registrationError;
 
-      console.log("Registration created:", registration);
-      console.log("Registration ID:", registration.id);
+      // Progress to next step
+      onNext({
+        name,
+        email,
+        registrationId: registration.id,
+        userId: authData.user.id,
+      });
 
-      onNext({ name, email, registrationId: registration.id });
-      toast.success(
-        "Signup successful! Please check your email to verify your account."
-      );
+      toast.success("Please check your email to verify your account.");
     } catch (error) {
-      toast.error(error.message || "Error during signup");
+      onError(error.message || "Error during signup");
     } finally {
       setLoading(false);
     }
