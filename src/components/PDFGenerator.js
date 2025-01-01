@@ -24,22 +24,13 @@ export const generatePDF = async (content, placeholderValues) => {
       return match;
     });
 
-    // Special handling for signature placeholders with improved formatting
-    processedText = processedText.replace(
-      /\{\{(COMPANY|INVESTOR)_NAME\}\}\n\nBy: \{\{(COMPANY|INVESTOR)_SIGNER_NAME\}\}/g,
-      (match, type, signerType) => {
-        const name = placeholderMap[`${type}_NAME`]?.value;
-        const signerName = placeholderMap[`${type}_SIGNER_NAME`]?.value;
-        return `${name}\n\nBy: ${signerName}\n\n_____________________________`;
-      }
-    );
-
     // Configure marked options
     marked.setOptions({
       breaks: true,
       gfm: true,
       headerIds: true,
       smartLists: true,
+      gfm: false,
     });
 
     // Convert markdown to HTML
@@ -84,64 +75,72 @@ export const generatePDF = async (content, placeholderValues) => {
         font-size: 12pt;
       }
 
-      .preview-content p:has(+ p:last-child),
-      .preview-content p:last-child {
-        position: relative;
-        margin-top: 60px;
-        text-align: left;
-        padding-top: 40px;
-      }
-
-      .preview-content p:has(+ p:last-child)::before,
-      .preview-content p:last-child::before {
-        content: "";
-        position: absolute;
-        top: 30px;
-        left: 0;
-        width: 250px;
-        border-top: 1px solid #000;
-      }
-
-      .preview-content p:has(+ p:last-child) strong,
-      .preview-content p:last-child strong {
-        display: block;
-        margin-top: 4px;
-        font-weight: bold;
-      }
-
-      .preview-content p:has(+ p:last-child) em,
-      .preview-content p:last-child em {
-        display: block;
-        margin-top: 4px;
-        font-style: normal;
-        color: #666;
-        font-size: 0.9em;
-      }
-
-      .preview-content p:has(+ p:last-child) {
-        margin-bottom: 60px;
+      /* Explicitly prevent any hr styling */
+      .preview-content hr {
+        display: none;
       }
     `;
+
+    // Add debug logging
+    console.log("Initial container height:", tempContainer.offsetHeight);
+    console.log("Initial scroll height:", tempContainer.scrollHeight);
 
     // Create temporary container for PDF generation
     const tempDiv = document.createElement("div");
     tempDiv.style.position = "absolute";
     tempDiv.style.left = "-9999px";
     tempDiv.style.top = "0";
+    tempDiv.style.width = "210mm"; // A4 width
+    tempDiv.style.minHeight = "297mm"; // A4 height
+    tempDiv.style.padding = "0 0 150mm 0"; // Significantly increased bottom padding
+    tempDiv.style.overflow = "visible";
     tempDiv.appendChild(styleElement);
     tempDiv.appendChild(tempContainer);
     document.body.appendChild(tempDiv);
 
+    // Give browser more time to calculate proper dimensions
+    await new Promise((resolve) => setTimeout(resolve, 1000)); // Increased timeout
+
+    // Get the actual height after the browser has rendered
+    const actualHeight =
+      Math.max(
+        tempContainer.offsetHeight,
+        tempContainer.scrollHeight,
+        tempContainer.clientHeight,
+        297 * 3.779527559 // Convert mm to px (1mm = 3.779527559px)
+      ) + 300; // Significantly increased buffer
+
+    console.log("Container heights:", {
+      offsetHeight: tempContainer.offsetHeight,
+      scrollHeight: tempContainer.scrollHeight,
+      clientHeight: tempContainer.clientHeight,
+      calculatedHeight: actualHeight,
+    });
+
     // Configure PDF options
     const options = {
-      margin: [20, 20],
+      margin: [20, 20, 80, 20], // Significantly increased bottom margin
       filename: "document.pdf",
       image: { type: "jpeg", quality: 0.98 },
       html2canvas: {
         scale: 2,
         scrollY: 0,
-        windowHeight: tempContainer.scrollHeight,
-        height: tempContainer.scrollHeight,
+        useCORS: true,
+        logging: true,
+        windowWidth: tempContainer.offsetWidth,
+        windowHeight: actualHeight,
+        height: actualHeight,
+        removeContainer: false,
+        allowTaint: true,
+        backgroundColor: "#ffffff",
+        onclone: (clonedDoc) => {
+          const clonedContent = clonedDoc.querySelector(".preview-content");
+          console.log("Cloned content height:", clonedContent.offsetHeight);
+          // Ensure clone has sufficient height
+          clonedContent.style.minHeight = `${actualHeight}px`;
+          // Remove any horizontal rules that might have been added
+          clonedContent.querySelectorAll("hr").forEach((hr) => hr.remove());
+        },
       },
       jsPDF: {
         unit: "mm",
