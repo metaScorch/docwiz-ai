@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
+import Image from "next/image";
 
 export default function SignupStep({ onNext }) {
   const [loading, setLoading] = useState(false);
@@ -57,8 +58,8 @@ export default function SignupStep({ onNext }) {
 
       if (registrationError) throw registrationError;
 
-      console.log('Registration created:', registration);
-      console.log('Registration ID:', registration.id);
+      console.log("Registration created:", registration);
+      console.log("Registration ID:", registration.id);
 
       onNext({ name, email, registrationId: registration.id });
       toast.success(
@@ -73,6 +74,16 @@ export default function SignupStep({ onNext }) {
 
   return (
     <div className="space-y-4">
+      <div className="flex justify-center mb-6">
+        <Image
+          src="/logo.png"
+          alt="DocWiz Logo"
+          width={200}
+          height={60}
+          priority
+        />
+      </div>
+      <h1 className="text-2xl font-semibold text-center mb-6">Signup</h1>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="name">Name</Label>

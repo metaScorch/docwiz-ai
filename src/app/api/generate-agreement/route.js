@@ -20,7 +20,8 @@ const supabase = createClient(
 
 export async function POST(req) {
   try {
-    const { prompt, userId, jurisdiction } = await req.json();
+    const { prompt, userId, jurisdiction, complexity, length } =
+      await req.json();
 
     if (!userId || !jurisdiction) {
       return NextResponse.json(
@@ -29,19 +30,53 @@ export async function POST(req) {
       );
     }
 
+    // Define word count ranges based on length parameter
+    const wordCountRanges = {
+      1: { min: 300, max: 500 },
+      2: { min: 600, max: 1000 },
+      3: { min: 1200, max: 2000 },
+      4: { min: 2500, max: 3500 },
+      5: { min: 4000, max: 6000 },
+    };
+
+    // Define complexity descriptions
+    const complexityLevels = {
+      1: "Use simple, everyday language with minimal legal terms.",
+      2: "Use basic legal terms with clear explanations.",
+      3: "Use standard legal language balanced with clarity.",
+      4: "Use detailed legal terminology with proper context.",
+      5: "Use comprehensive legal language with technical precision.",
+    };
+
     const completion = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
         {
           role: "system",
-          content: `You are a legal document generator. You must respond with valid JSON only. Your response must be a single JSON object with exactly these fields: "title" (string), "description" (string), "content" (string), and "isLegal" (boolean). The "content" field must include detailed Markdown content with appropriate placeholders denoted by [PLACEHOLDERS]. For illegal requests or requests that don't comply with ${jurisdiction} laws, set "isLegal" to false. The "title" should be a concise name for the document, and the "description" should briefly explain its purpose. Ensure that the document content is as elaborate and detailed as necessary for professional use, typically resembling a legal document prepared by an experienced lawyer. Use a formal tone and structure throughout, do not try to be concise.
+          content: `You are a legal document generator. You must respond with valid JSON only. Your response must contain two primary objects:
 
+1. **Document Details**:
+   - "title" (string): A concise name for the document.
+   - "description" (string): A brief explanation of the document's purpose.
+   - "content" (string): The main body of the document written in Markdown format. Include placeholders for dynamic fields in the format "{{PLACEHOLDER_NAME}}" where appropriate.
 
+2. **Placeholders**:
+   - A list of all placeholders used in the "content" field. Each placeholder must be represented as an object with:
+      - "name" (string): The exact name of the placeholder (e.g., "PLACEHOLDER_NAME").
+      - "description" (string): A brief description of the purpose or meaning of the placeholder.
+      - "format" (object): Specifies the input format with properties:
+         - "type": One of "text", "date", "currency", "number", "email", "phone".
+         - "currency": Required if type is "currency", specify "USD" or "INR" based on jurisdiction.
+         - "pattern": Optional regex pattern for validation.
+      - "signer" (boolean): **Optional**, include only if the placeholder represents a signing party's name.
 
+Ensure the "signer" field is only included when required for identifying signing parties' names. Exclude it for all other placeholders, including signature fields.
 
+The output must be valid JSON and strictly adhere to the described format.
 
-
-`,
+Additional Requirements:
+- The document should be between ${wordCountRanges[length].min} and ${wordCountRanges[length].max} words.
+- Complexity Level: ${complexityLevels[complexity]}`,
         },
         {
           role: "user",
@@ -53,19 +88,61 @@ export async function POST(req) {
 
     const response = completion.choices[0].message.content;
     let parsedResponse;
+
     try {
-      const cleanedResponse = response.trim().replace(/[\n\r]/g, " ");
+      const cleanedResponse = response
+        .trim()
+        .replace(/[\n\r]/g, " ")
+        .replace(/^```json\s*|\s*```$/g, "");
       parsedResponse = JSON.parse(cleanedResponse);
 
-      // Validate required fields
-      const requiredFields = ["title", "description", "content", "isLegal"];
-      const missingFields = requiredFields.filter(
-        (field) => !(field in parsedResponse)
-      );
+      // Validate and restructure the response
+      const documentDetails = parsedResponse["Document Details"];
+      const placeholders = parsedResponse["Placeholders"];
 
-      if (missingFields.length > 0) {
-        throw new Error(`Missing required fields: ${missingFields.join(", ")}`);
+      if (!documentDetails || !placeholders) {
+        throw new Error("Missing Document Details or Placeholders");
       }
+
+      // Initialize placeholder values with empty values
+      const placeholderValues = placeholders.map((placeholder) => ({
+        ...placeholder,
+        value: "",
+      }));
+
+      // Insert the new document
+      const { data: document, error } = await supabase
+        .from("user_documents")
+        .insert([
+          {
+            user_id: userId,
+            title: documentDetails.title,
+            content: documentDetails.content,
+            placeholder_values: placeholderValues,
+            status: "draft",
+          },
+        ])
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Database error:", error);
+        return NextResponse.json(
+          {
+            error: "Failed to save document",
+            details: error.message,
+          },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({
+        id: document.id,
+        title: documentDetails.title,
+        description: documentDetails.description,
+        content: documentDetails.content,
+        placeholder_values: placeholderValues,
+      });
     } catch (error) {
       console.error("JSON parsing error:", error, "Raw response:", response);
       return NextResponse.json(
@@ -73,42 +150,6 @@ export async function POST(req) {
         { status: 500 }
       );
     }
-
-    if (!parsedResponse.isLegal) {
-      return NextResponse.json(
-        { error: "Cannot generate illegal or unethical agreements" },
-        { status: 400 }
-      );
-    }
-
-    // When inserting, try using rpc call instead
-    const { data, error } = await supabase.rpc("insert_template", {
-      p_user_id: userId,
-      p_template_name: parsedResponse.title,
-      p_content: String(parsedResponse.content),
-      p_ideal_for: parsedResponse.description,
-      p_description: parsedResponse.description,
-      p_is_ai_generated: parsedResponse.isLegal,
-    });
-
-    if (error) {
-      console.error("Database error:", error);
-      return NextResponse.json(
-        {
-          error: "Failed to save template",
-          details: error.message,
-          userId: userId,
-        },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({
-      title: parsedResponse.title,
-      description: parsedResponse.description,
-      content: String(parsedResponse.content),
-      isLegal: parsedResponse.isLegal,
-    });
   } catch (error) {
     console.error("Error:", error);
     return NextResponse.json(

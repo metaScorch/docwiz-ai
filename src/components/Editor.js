@@ -23,14 +23,14 @@ import { Wand2 } from "lucide-react";
 // Create a new lowlight instance with common languages
 const lowlight = createLowlight(common);
 
-// Add this custom extension for placeholders
-const CustomPlaceholder = Extension.create({
-  name: "customPlaceholder",
+// Custom extension for placeholder highlighting and value display
+const PlaceholderHighlight = Extension.create({
+  name: "placeholderHighlight",
 
   addProseMirrorPlugins() {
     return [
       new Plugin({
-        key: new PluginKey("customPlaceholder"),
+        key: new PluginKey("placeholderHighlight"),
         props: {
           decorations: (state) => {
             const { doc } = state;
@@ -38,15 +38,16 @@ const CustomPlaceholder = Extension.create({
 
             doc.descendants((node, pos) => {
               if (node.isText) {
-                const regex = /\[([^\]]+)\]/g;
+                const regex = /\{\{([^}]+)\}\}/g;
                 let match;
+
                 while ((match = regex.exec(node.text)) !== null) {
                   const start = pos + match.index;
                   const end = start + match[0].length;
 
                   decorations.push(
                     Decoration.inline(start, end, {
-                      class: "custom-placeholder",
+                      class: "placeholder-text",
                     })
                   );
                 }
@@ -75,125 +76,51 @@ export default function Editor({
   const [previewChanges, setPreviewChanges] = useState(null);
   const supabase = createClientComponentClient();
 
-  // Define all handler functions first
-  const handleEditorUpdate = ({ editor }) => {
-    const content = editor.getHTML();
-
-    // Update document values based on editor content
-    const newValues = {};
-    Object.keys(documentValues).forEach((key) => {
-      const placeholder = `[${key}]`;
-      const regex = new RegExp(
-        `${placeholder}|(?<=Name:\\s)([^\\n]+)|(?<=Address:\\s)([^\\n]+)`
-      );
-      const match = content.match(regex);
-      if (match && match[0] !== placeholder) {
-        newValues[key] = match[0];
-      }
-    });
-
-    setDocumentValues((prev) => ({
-      ...prev,
-      ...newValues,
-    }));
-
-    // Call the parent's onChange handler
-    if (onChange) {
-      onChange(content);
-    }
-  };
-
-  const handlePlaceholderChange = (key, value) => {
-    setDocumentValues((prev) => ({
-      ...prev,
-      [key]: value,
-    }));
-
-    if (editor) {
-      editor.commands.command(({ tr, state }) => {
-        let hasChanges = false;
-
-        state.doc.descendants((node, pos) => {
-          if (node.isText) {
-            const text = node.text;
-            const placeholder = `[${key}]`;
-            const index = text.indexOf(placeholder);
-
-            if (index > -1) {
-              tr.delete(pos + index, pos + index + placeholder.length);
-              tr.insertText(value || placeholder, pos + index);
-              hasChanges = true;
-            }
-          }
-        });
-
-        return hasChanges;
-      });
-    }
-  };
-
-  const extractPlaceholders = useCallback((content) => {
-    const regex = /\[([^\]]+)\]/g;
-    const matches = [];
+  // Function to extract placeholders from content
+  const extractPlaceholders = useCallback((text) => {
+    console.log("Extracting placeholders from:", text);
+    const regex = /\{\{([^}]+)\}\}/g;
+    const placeholders = {};
     let match;
 
-    while ((match = regex.exec(content)) !== null) {
-      matches.push({
-        key: match[0],
-        label: match[1],
+    while ((match = regex.exec(text)) !== null) {
+      const name = match[1];
+      placeholders[name] = {
+        name: name,
         value: "",
-      });
+        description: `Value for ${name.toLowerCase().replace(/_/g, " ")}`,
+      };
     }
 
-    return matches;
+    console.log("Extracted placeholders:", placeholders);
+    return placeholders;
   }, []);
 
-  const initializeDocumentValues = useCallback(
+  // Add this function to replace placeholders with their values
+  const replaceContentPlaceholders = useCallback(
     (content) => {
-      const placeholders = extractPlaceholders(content);
-      return placeholders.reduce((acc, placeholder) => {
-        acc[placeholder.label] = placeholder.value;
-        return acc;
-      }, {});
+      if (!content || !documentValues) return content;
+
+      let processedContent = content;
+      Object.entries(documentValues).forEach(([name, details]) => {
+        const placeholder = `{{${name}}}`;
+        const value = details.value || placeholder;
+        processedContent = processedContent.replace(
+          new RegExp(placeholder, "g"),
+          value
+        );
+      });
+
+      return processedContent;
     },
-    [extractPlaceholders]
+    [documentValues]
   );
 
-  // Move this function before the editor initialization
-  const handleSelection = () => {
-    if (!editor) return;
-
-    const { view } = editor;
-    const { from, to } = view.state.selection;
-
-    if (from === to) {
-      setSelection(null);
-      setPopupPosition(null);
-      return;
-    }
-
-    const selectedText = editor.state.doc.textBetween(from, to);
-    const coords = view.coordsAtPos(from);
-
-    setSelection({
-      text: selectedText,
-      from,
-      to,
-    });
-
-    setPopupPosition({
-      top: coords.top + window.scrollY - 10,
-      left: coords.left + window.scrollX,
-    });
-  };
-
-  // Then initialize the editor with the handleSelection function
+  // Editor initialization
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        heading: {
-          levels: [1, 2, 3, 4, 5, 6],
-        },
+        heading: { levels: [1, 2, 3, 4, 5, 6] },
         codeBlock: false,
       }),
       Placeholder.configure({
@@ -212,17 +139,28 @@ export default function Editor({
         transformPastedText: true,
         transformCopiedText: true,
       }),
-      CustomPlaceholder,
+      PlaceholderHighlight,
     ],
-    content: content,
-    onCreate: ({ editor }) => {
-      const initialValues = initializeDocumentValues(editor.getText());
-      setDocumentValues(initialValues);
-    },
+    content: replaceContentPlaceholders(content),
     onUpdate: ({ editor }) => {
+      // Get the markdown content
       const markdown = editor.storage.markdown.getMarkdown();
+
+      // Replace any displayed values back to placeholders before saving
+      let processedMarkdown = markdown;
+      Object.entries(documentValues).forEach(([name, details]) => {
+        if (details.value) {
+          const value = details.value;
+          const placeholder = `{{${name}}}`;
+          processedMarkdown = processedMarkdown.replace(
+            new RegExp(value, "g"),
+            placeholder
+          );
+        }
+      });
+
       if (onChange) {
-        onChange(markdown);
+        onChange(processedMarkdown);
       }
     },
     editorProps: {
@@ -237,24 +175,154 @@ export default function Editor({
           " prose-pre:text-sm",
       },
     },
-    onSelectionUpdate: handleSelection,
   });
 
+  // Initialize document values from database or content
   useEffect(() => {
-    setIsMounted(true);
-  }, []);
+    if (documentId && content) {
+      const fetchDocumentValues = async () => {
+        console.log("Fetching document values for ID:", documentId);
+        const { data: document, error } = await supabase
+          .from("user_documents")
+          .select("placeholder_values")
+          .eq("id", documentId)
+          .single();
 
-  // Add function to handle suggestion submission
-  const handleSuggestionSubmit = async (prompt) => {
+        console.log("Database values:", document?.placeholder_values);
+
+        // Extract placeholders from content first
+        const placeholders = extractPlaceholders(content);
+
+        // If we have values in the database, update the placeholders
+        if (!error && document?.placeholder_values?.length > 0) {
+          document.placeholder_values.forEach((dbPlaceholder) => {
+            if (placeholders[dbPlaceholder.name]) {
+              // Preserve all metadata from the database
+              placeholders[dbPlaceholder.name] = {
+                ...dbPlaceholder,
+                value: dbPlaceholder.value || "",
+              };
+            }
+          });
+        }
+
+        console.log("Final placeholder values:", placeholders);
+        setDocumentValues(placeholders);
+      };
+
+      fetchDocumentValues();
+    } else if (content) {
+      // If no documentId but we have content, just extract placeholders
+      const placeholders = extractPlaceholders(content);
+      setDocumentValues(placeholders);
+    }
+  }, [documentId, content, extractPlaceholders, supabase]);
+
+  // Selection handling
+  useEffect(() => {
+    if (!editor) return;
+
+    const handleSelection = () => {
+      const { view } = editor;
+      const { from, to } = view.state.selection;
+
+      if (from === to) {
+        setSelection(null);
+        setPopupPosition(null);
+        return;
+      }
+
+      const selectedText = editor.state.doc.textBetween(from, to);
+      const coords = view.coordsAtPos(from);
+
+      setSelection({
+        text: selectedText,
+        from,
+        to,
+      });
+
+      setPopupPosition({
+        top: coords.top + window.scrollY - 10,
+        left: coords.left + window.scrollX,
+      });
+    };
+
+    editor.on("selectionUpdate", handleSelection);
+    return () => editor.off("selectionUpdate", handleSelection);
+  }, [editor]);
+
+  // Placeholder value handling
+  const handlePlaceholderChange = async (name, value) => {
+    console.log("Updating placeholder:", name, "with value:", value);
+
+    // Update local state
+    const newValues = {
+      ...documentValues,
+      [name]: {
+        ...documentValues[name],
+        value: value,
+      },
+    };
+    setDocumentValues(newValues);
+
+    // Update database if we have a document ID
+    if (documentId) {
+      // Get existing placeholder values from database
+      const { data: document, error: fetchError } = await supabase
+        .from("user_documents")
+        .select("placeholder_values")
+        .eq("id", documentId)
+        .single();
+
+      if (fetchError) {
+        console.error(
+          "Error fetching existing placeholder values:",
+          fetchError
+        );
+        return;
+      }
+
+      // Create a map of existing placeholder data
+      const existingPlaceholders = document.placeholder_values.reduce(
+        (acc, placeholder) => {
+          acc[placeholder.name] = placeholder;
+          return acc;
+        },
+        {}
+      );
+
+      // Merge new values while preserving existing metadata
+      const placeholderArray = Object.entries(newValues).map(
+        ([name, details]) => ({
+          ...existingPlaceholders[name], // Preserve existing metadata
+          name,
+          value: details.value || "", // Update only the value
+        })
+      );
+
+      const { error } = await supabase
+        .from("user_documents")
+        .update({
+          placeholder_values: placeholderArray,
+        })
+        .eq("id", documentId);
+
+      if (error) {
+        console.error("Error updating placeholder values:", error);
+      }
+    }
+  };
+
+  // AI improvement handling
+  const handleSuggestionSubmit = async (prompt, shouldFormat = false) => {
     if (!selection) return;
 
     setIsProcessing(true);
     try {
+      // First, improve the selected text
       const response = await fetch("/api/improve-text", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           selectedText: selection.text,
           fullDocument: editor.getHTML(),
@@ -263,36 +331,69 @@ export default function Editor({
       });
 
       const data = await response.json();
-
       if (data.error) throw new Error(data.error);
 
-      setPreviewChanges({
-        originalText: selection.text,
-        newText: data.improvedText,
-        from: selection.from,
-        to: selection.to,
-      });
+      // If formatting is requested, process the entire document
+      if (shouldFormat) {
+        const updatedContent =
+          editor.state.doc.textBetween(0, selection.from) +
+          data.improvedText +
+          editor.state.doc.textBetween(
+            selection.to,
+            editor.state.doc.content.size
+          );
 
-      setPopupPosition(null); // Hide the suggestion popup
+        const formatResponse = await fetch("/api/improve-formatting", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content: updatedContent,
+          }),
+        });
+
+        const formatData = await formatResponse.json();
+        if (formatData.error) throw new Error(formatData.error);
+
+        setPreviewChanges({
+          originalText: selection.text,
+          newText: data.improvedText,
+          from: selection.from,
+          to: selection.to,
+          formattedDocument: formatData.formattedContent,
+        });
+      } else {
+        setPreviewChanges({
+          originalText: selection.text,
+          newText: data.improvedText,
+          from: selection.from,
+          to: selection.to,
+        });
+      }
+
+      setPopupPosition(null);
     } catch (error) {
       console.error("Error improving text:", error);
-      // Handle error (show toast notification, etc.)
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // Add these new handler functions
   const handleAcceptChanges = () => {
     if (!previewChanges) return;
 
-    editor
-      .chain()
-      .focus()
-      .setTextSelection({ from: previewChanges.from, to: previewChanges.to })
-      .deleteSelection()
-      .insertContent(previewChanges.newText)
-      .run();
+    if (previewChanges.formattedDocument) {
+      // If we have a formatted version, use the entire document
+      editor.commands.setContent(previewChanges.formattedDocument);
+    } else {
+      // Otherwise just replace the selected portion
+      editor
+        .chain()
+        .focus()
+        .setTextSelection({ from: previewChanges.from, to: previewChanges.to })
+        .deleteSelection()
+        .insertContent(previewChanges.newText)
+        .run();
+    }
 
     setPreviewChanges(null);
     setSelection(null);
@@ -308,8 +409,6 @@ export default function Editor({
 
     try {
       const currentContent = editor.storage.markdown.getMarkdown();
-
-      // Call the parent's onImproveFormatting handler
       if (onImproveFormatting) {
         const formattedContent = await onImproveFormatting(currentContent);
         if (formattedContent) {
@@ -320,6 +419,27 @@ export default function Editor({
       console.error("Error improving formatting:", error);
     }
   };
+
+  // Update editor content when documentValues change
+  useEffect(() => {
+    if (editor && content && documentValues) {
+      const processedContent = replaceContentPlaceholders(content);
+      // Only update if the content is actually different
+      if (processedContent !== editor.getHTML()) {
+        // Store current selection
+        const { from, to } = editor.state.selection;
+
+        editor.commands.setContent(processedContent, false);
+
+        // Restore selection
+        editor.commands.setTextSelection({ from, to });
+      }
+    }
+  }, [documentValues, content, editor, replaceContentPlaceholders]);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   if (!isMounted) {
     return (

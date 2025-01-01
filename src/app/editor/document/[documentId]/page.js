@@ -8,6 +8,7 @@ import Editor from "@/components/Editor";
 import { formatDistanceToNow } from "date-fns";
 import { use } from "react";
 import LoadingModal from "@/components/LoadingModal";
+import { redirect } from "next/navigation";
 
 export default function EditorPage({ params }) {
   const resolvedParams = use(params);
@@ -54,6 +55,15 @@ export default function EditorPage({ params }) {
         return;
       }
 
+      // Redirect to tracking page if document is pending signature or completed
+      if (
+        document.status === "pending_signature" ||
+        document.status === "completed"
+      ) {
+        router.push(`/editor/document/${documentId}/tracking`);
+        return;
+      }
+
       if (document) {
         setUserDocument(document);
         setContent(document.content);
@@ -61,7 +71,7 @@ export default function EditorPage({ params }) {
     }
 
     fetchDocument();
-  }, [documentId, supabase]);
+  }, [documentId, supabase, router]);
 
   useEffect(() => {
     const intervalId = setInterval(() => {
@@ -69,7 +79,7 @@ export default function EditorPage({ params }) {
     }, 60000);
 
     return () => clearInterval(intervalId);
-  }, []);
+  }, [router]);
 
   const handleContentChange = async (newContent) => {
     const newTimestamp = new Date().toISOString();
@@ -184,7 +194,13 @@ export default function EditorPage({ params }) {
             <Button variant="outline" onClick={() => router.back()}>
               Back
             </Button>
-            <Button>Save</Button>
+            <Button
+              onClick={() =>
+                router.push(`/editor/document/${documentId}/preview`)
+              }
+            >
+              Next
+            </Button>
           </div>
         </div>
         <div className="text-sm text-muted-foreground mt-2">

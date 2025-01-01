@@ -6,6 +6,7 @@ import { Wand2 } from "lucide-react"; // Import the magic wand icon
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { Select } from "@/components/ui/select";
 import { JurisdictionSearch } from "@/components/JurisdictionSearch";
+import { Slider } from "@/components/ui/slider";
 
 export function NewAgreementForm() {
   const router = useRouter();
@@ -14,6 +15,9 @@ export function NewAgreementForm() {
   const [loading, setLoading] = useState(false);
   const [jurisdiction, setJurisdiction] = useState("");
   const [userRegistration, setUserRegistration] = useState(null);
+  const [complexity, setComplexity] = useState(3);
+  const [length, setLength] = useState(3);
+  const [jurisdictionError, setJurisdictionError] = useState(false);
 
   useEffect(() => {
     const fetchUserRegistration = async () => {
@@ -38,14 +42,19 @@ export function NewAgreementForm() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Add jurisdiction validation
+    if (!jurisdiction) {
+      setJurisdictionError(true);
+      return;
+    }
+    setJurisdictionError(false);
     setLoading(true);
 
     try {
-      // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      // Generate agreement using AI
       const response = await fetch('/api/generate-agreement', {
         method: 'POST',
         headers: {
@@ -54,35 +63,45 @@ export function NewAgreementForm() {
         body: JSON.stringify({
           prompt,
           userId: user.id,
-          jurisdiction
+          jurisdiction,
+          complexity,
+          length
         }),
       });
 
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
 
-      // Create new document
-      const { data: newDocument, error } = await supabase
-        .from('user_documents')
-        .insert([{
-          user_id: user.id,
-          content: data.content,
-          title: data.title,
-          status: 'draft'
-        }])
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Redirect to editor
-      router.push(`/editor/document/${newDocument.id}`);
+      // Just redirect to the document created by the API
+      router.push(`/editor/document/${data.id}`);
     } catch (error) {
       console.error('Error:', error);
       // Add error handling/notification here
     } finally {
       setLoading(false);
     }
+  };
+
+  const getComplexityLabel = (value) => {
+    const labels = {
+      1: "Simple, easy to understand",
+      2: "Basic legal terms",
+      3: "Standard legal language",
+      4: "Detailed legal terminology",
+      5: "Complex legal language"
+    };
+    return labels[value];
+  };
+
+  const getLengthLabel = (value) => {
+    const labels = {
+      1: "Very brief",
+      2: "Concise",
+      3: "Standard",
+      4: "Detailed",
+      5: "Comprehensive"
+    };
+    return labels[value];
   };
 
   return (
@@ -104,20 +123,60 @@ Example: I need a non-disclosure agreement for a freelance developer who will be
         </p>
       </div>
       <div className="space-y-2">
-        <label className="text-sm text-muted-foreground">Jurisdiction</label>
+        <label className="text-sm text-muted-foreground">
+          Jurisdiction <span className="text-red-500">*</span>
+        </label>
         <JurisdictionSearch
           value={jurisdiction}
           onChange={setJurisdiction}
           defaultValue={userRegistration ? 
             `${userRegistration.city_name}, ${userRegistration.state_name}, ${userRegistration.country_name}` : 
-            undefined
+            "Select jurisdiction"
           }
         />
+        {jurisdictionError && (
+          <p className="text-sm text-red-500">
+            Please select a jurisdiction
+          </p>
+        )}
         {userRegistration && (
           <p className="text-sm text-muted-foreground">
             Default jurisdiction based on your registration
           </p>
         )}
+      </div>
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <label className="text-sm text-muted-foreground">Wording Complexity</label>
+          <Slider
+            min={1}
+            max={5}
+            step={1}
+            value={[complexity]}
+            onValueChange={([value]) => setComplexity(value)}
+            className="w-full"
+            style={{
+              "--slider-color": "#0700c7"
+            }}
+          />
+          <p className="text-sm text-muted-foreground">{getComplexityLabel(complexity)}</p>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm text-muted-foreground">Agreement Length</label>
+          <Slider
+            min={1}
+            max={5}
+            step={1}
+            value={[length]}
+            onValueChange={([value]) => setLength(value)}
+            className="w-full"
+            style={{
+              "--slider-color": "#0700c7"
+            }}
+          />
+          <p className="text-sm text-muted-foreground">{getLengthLabel(length)}</p>
+        </div>
       </div>
       <Button type="submit" className="w-full" disabled={loading}>
         {loading ? "Generating..." : "Generate Agreement"}

@@ -123,7 +123,7 @@ export default function VerifyEmail() {
         <CardContent className="space-y-6">
           {userEmail && (
             <p className="text-center text-gray-600">
-              We've sent a verification email to{" "}
+              We&apos;ve sent a verification email to{" "}
               <span className="font-medium">{userEmail}</span>
             </p>
           )}

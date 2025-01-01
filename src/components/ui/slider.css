@@ -1,0 +1,13 @@
+.slider {
+  --slider-color: #0700c7;
+}
+
+/* Add these styles to customize the slider track and thumb */
+.slider [data-slider-thumb] {
+  background-color: var(--slider-color);
+  border-color: var(--slider-color);
+}
+
+.slider [data-slider-track][data-orientation="horizontal"] {
+  background-color: var(--slider-color);
+}

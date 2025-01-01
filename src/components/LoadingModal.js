@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Loader2 } from "lucide-react";
 
 export default function LoadingModal({ isOpen, onCancel }) {
   const [loadingText, setLoadingText] = useState(
@@ -36,12 +37,12 @@ export default function LoadingModal({ isOpen, onCancel }) {
       <div className="bg-white p-6 rounded-lg shadow-lg text-center w-[400px]">
         <h2 className="text-xl font-semibold mb-4">Formatting using AI</h2>
         <div className="mb-6">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-500 mx-auto mb-4"></div>
+          <Loader2 className="h-10 w-10 animate-spin text-[#0700C7] mx-auto mb-4" />
           <p className="text-gray-600 min-h-[28px]">{loadingText}</p>
         </div>
         <button
           onClick={onCancel}
-          className="bg-red-500 text-white px-6 py-2 rounded hover:bg-red-600 transition-colors font-medium"
+          className="bg-[#000000] text-white px-6 py-2 rounded hover:bg-[#000000] transition-colors font-medium"
         >
           Cancel
         </button>

@@ -79,28 +79,39 @@ export default function OnboardingForm() {
       <Card className="w-full max-w-2xl">
         <CardHeader>
           <CardTitle className="text-2xl font-bold text-center">
-            {steps[currentStep]}
+            {currentStep > 0 ? steps[currentStep] : ""}
           </CardTitle>
         </CardHeader>
         <CardContent>{renderStep()}</CardContent>
-        <CardFooter className="flex justify-between">
-          <Button
-            variant="outline"
-            onClick={handleBack}
-            disabled={currentStep === 0}
-          >
-            Back
-          </Button>
-          <div className="flex space-x-2">
-            {steps.map((_, index) => (
-              <div
-                key={index}
-                className={`w-3 h-3 rounded-full ${
-                  index === currentStep ? "bg-blue-500" : "bg-gray-300"
-                }`}
-              />
-            ))}
+        <CardFooter className="flex flex-col gap-4">
+          <div className="flex justify-between w-full">
+            <Button
+              variant="outline"
+              onClick={handleBack}
+              disabled={currentStep === 0}
+            >
+              Back
+            </Button>
+            <div className="flex space-x-2">
+              {steps.map((_, index) => (
+                <div
+                  key={index}
+                  className={`w-3 h-3 rounded-full ${
+                    index === currentStep ? "bg-blue-500" : "bg-gray-300"
+                  }`}
+                />
+              ))}
+            </div>
           </div>
+          {currentStep === 0 && (
+            <Button
+              variant="link"
+              className="text-blue-600 hover:text-blue-800"
+              onClick={() => (window.location.href = "/sign-in")}
+            >
+              Already have an account? Login
+            </Button>
+          )}
         </CardFooter>
       </Card>
     </div>

@@ -4,12 +4,11 @@ import { Building, Briefcase, Users, User } from "lucide-react";
 import { useCallback } from "react";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 
-
 const organizationTypes = [
   {
     type: "Individual",
     icon: User,
-    description: "Perfect for freelancers and solo entrepreneurs",
+    description: "Perfect lancers and solo entrepreneurs",
   },
   {
     type: "SMB",
@@ -31,15 +30,15 @@ const organizationTypes = [
 export default function OrganizationTypeStep({ onNext, registrationId }) {
   const supabase = createClientComponentClient();
 
-  console.log('OrganizationTypeStep registrationId:', registrationId); // Debug log
+  console.log("OrganizationTypeStep registrationId:", registrationId); // Debug log
 
   const handleSelection = useCallback(
     async (type) => {
       try {
-        console.log('Updating registration:', registrationId, type); // Debug log
-        
+        console.log("Updating registration:", registrationId, type); // Debug log
+
         if (!registrationId) {
-          throw new Error('Registration ID is missing');
+          throw new Error("Registration ID is missing");
         }
 
         const { error } = await supabase
