@@ -8,7 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import PDFPreview from "@/components/PDFPreview";
 import { toast } from "sonner";
-import { generatePDF } from "@/components/PDFGenerator";
+import {
+  generatePreviewPDF,
+  generateSignwellPDF,
+} from "@/components/PDFGenerator";
 
 export default function PreviewPage({ params }) {
   const documentId = use(params).documentId;
@@ -96,8 +99,8 @@ export default function PreviewPage({ params }) {
         return;
       }
 
-      // Generate PDF with content and placeholder values
-      const pdfBlob = await generatePDF(
+      // Update PDF generation to use generateSignwellPDF
+      const pdfBlob = await generateSignwellPDF(
         document.content,
         document.placeholder_values
       );
@@ -202,12 +205,47 @@ export default function PreviewPage({ params }) {
     }
   };
 
+  // Add new preview download handler
+  const handlePreviewDownload = async () => {
+    try {
+      const pdfBlob = await generatePreviewPDF(
+        document.content,
+        document.placeholder_values
+      );
+
+      // Create download link
+      const url = window.URL.createObjectURL(pdfBlob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute(
+        "download",
+        `${document.title || "document"}_preview.pdf`
+      );
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error downloading preview:", error);
+      toast.error("Failed to download preview");
+    }
+  };
+
   if (!document) return <div>Loading...</div>;
 
   return (
     <div className="container mx-auto p-6">
       <div className="grid grid-cols-2 gap-6">
         <div className="border rounded-lg p-4">
+          <div className="mb-4">
+            <Button
+              onClick={handlePreviewDownload}
+              variant="outline"
+              className="w-full"
+            >
+              Download Preview
+            </Button>
+          </div>
           <PDFPreview
             content={document.content}
             placeholderValues={document.placeholder_values}
