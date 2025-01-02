@@ -7,20 +7,23 @@ export const generatePDF = async (content, placeholderValues) => {
   try {
     let processedText = content;
 
-    // Convert placeholderValues array to an object for easier lookup
-    const placeholderMap = placeholderValues.reduce((acc, item) => {
-      acc[item.name] = item;
-      return acc;
-    }, {});
+    // Ensure placeholderValues is an array and create the map
+    const placeholderMap = Array.isArray(placeholderValues)
+      ? placeholderValues.reduce((acc, item) => {
+          if (item && item.name) {
+            acc[item.name] = item;
+          }
+          return acc;
+        }, {})
+      : {};
 
-    // First pass: replace placeholders with their values
+    // Replace placeholders with their values
     const regex = /\{\{([^}]+)\}\}/g;
     processedText = processedText.replace(regex, (match, placeholderName) => {
       const placeholder = placeholderMap[placeholderName];
       if (placeholder && placeholder.value) {
         return placeholder.value;
       }
-      // If no value or placeholder not found, keep the original placeholder
       return match;
     });
 
@@ -30,18 +33,17 @@ export const generatePDF = async (content, placeholderValues) => {
       gfm: true,
       headerIds: true,
       smartLists: true,
-      gfm: false,
     });
 
     // Convert markdown to HTML
     const processedContent = marked(processedText);
 
-    // Create temporary container with the processed content
+    // Create temporary container with content
     const tempContainer = document.createElement("div");
     tempContainer.className = "preview-content";
     tempContainer.innerHTML = processedContent;
 
-    // Create style element
+    // Add styling
     const styleElement = document.createElement("style");
     styleElement.textContent = `
       .preview-content {
@@ -49,9 +51,12 @@ export const generatePDF = async (content, placeholderValues) => {
         line-height: 1.8;
         color: #1a1a1a;
         padding: 40px;
+        scroll-behavior: smooth;
         position: relative;
         height: auto;
+        max-height: none;
         overflow: visible;
+        margin-right: 40px;
       }
 
       .preview-content h1 {
@@ -75,72 +80,38 @@ export const generatePDF = async (content, placeholderValues) => {
         font-size: 12pt;
       }
 
-      /* Explicitly prevent any hr styling */
-      .preview-content hr {
-        display: none;
+      @media print {
+        .preview-content {
+          height: auto;
+          overflow: visible;
+        }
       }
     `;
-
-    // Add debug logging
-    console.log("Initial container height:", tempContainer.offsetHeight);
-    console.log("Initial scroll height:", tempContainer.scrollHeight);
 
     // Create temporary container for PDF generation
     const tempDiv = document.createElement("div");
     tempDiv.style.position = "absolute";
     tempDiv.style.left = "-9999px";
     tempDiv.style.top = "0";
-    tempDiv.style.width = "210mm"; // A4 width
-    tempDiv.style.minHeight = "297mm"; // A4 height
-    tempDiv.style.padding = "0 0 150mm 0"; // Significantly increased bottom padding
-    tempDiv.style.overflow = "visible";
     tempDiv.appendChild(styleElement);
     tempDiv.appendChild(tempContainer);
     document.body.appendChild(tempDiv);
 
-    // Give browser more time to calculate proper dimensions
-    await new Promise((resolve) => setTimeout(resolve, 1000)); // Increased timeout
+    // Reset scroll and height properties for proper PDF generation
+    tempContainer.style.height = "auto";
+    tempContainer.style.maxHeight = "none";
+    tempContainer.style.overflow = "visible";
+    tempContainer.style.position = "relative";
 
-    // Get the actual height after the browser has rendered
-    const actualHeight =
-      Math.max(
-        tempContainer.offsetHeight,
-        tempContainer.scrollHeight,
-        tempContainer.clientHeight,
-        297 * 3.779527559 // Convert mm to px (1mm = 3.779527559px)
-      ) + 300; // Significantly increased buffer
-
-    console.log("Container heights:", {
-      offsetHeight: tempContainer.offsetHeight,
-      scrollHeight: tempContainer.scrollHeight,
-      clientHeight: tempContainer.clientHeight,
-      calculatedHeight: actualHeight,
-    });
-
-    // Configure PDF options
-    const options = {
-      margin: [20, 20, 80, 20], // Significantly increased bottom margin
+    const opt = {
+      margin: [20, 20],
       filename: "document.pdf",
       image: { type: "jpeg", quality: 0.98 },
       html2canvas: {
         scale: 2,
         scrollY: 0,
-        useCORS: true,
-        logging: true,
-        windowWidth: tempContainer.offsetWidth,
-        windowHeight: actualHeight,
-        height: actualHeight,
-        removeContainer: false,
-        allowTaint: true,
-        backgroundColor: "#ffffff",
-        onclone: (clonedDoc) => {
-          const clonedContent = clonedDoc.querySelector(".preview-content");
-          console.log("Cloned content height:", clonedContent.offsetHeight);
-          // Ensure clone has sufficient height
-          clonedContent.style.minHeight = `${actualHeight}px`;
-          // Remove any horizontal rules that might have been added
-          clonedContent.querySelectorAll("hr").forEach((hr) => hr.remove());
-        },
+        windowHeight: tempContainer.scrollHeight,
+        height: tempContainer.scrollHeight,
       },
       jsPDF: {
         unit: "mm",
@@ -152,7 +123,7 @@ export const generatePDF = async (content, placeholderValues) => {
     try {
       // Generate PDF blob
       const pdfBlob = await html2pdf()
-        .set(options)
+        .set(opt)
         .from(tempContainer)
         .outputPdf("blob");
 

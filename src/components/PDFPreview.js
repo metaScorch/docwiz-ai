@@ -38,26 +38,15 @@ export default function PDFPreview({ content, placeholderValues }) {
     console.log("placeholderValues:", placeholderValues); // Debug log
     console.log("placeholderMap:", placeholderMap); // Debug log
 
-    // First pass: replace placeholders with their values
+    // Replace placeholders with their values
     const regex = /\{\{([^}]+)\}\}/g;
     processedText = processedText.replace(regex, (match, placeholderName) => {
       const placeholder = placeholderMap[placeholderName];
       if (placeholder && placeholder.value) {
         return placeholder.value;
       }
-      // If no value or placeholder not found, keep the original placeholder
       return match;
     });
-
-    // Special handling for signature placeholders with improved formatting
-    processedText = processedText.replace(
-      /\{\{(COMPANY|INVESTOR)_NAME\}\}\n\nBy: \{\{(COMPANY|INVESTOR)_SIGNER_NAME\}\}/g,
-      (match, type, signerType) => {
-        const name = placeholderMap[`${type}_NAME`]?.value;
-        const signerName = placeholderMap[`${type}_SIGNER_NAME`]?.value;
-        return `${name}\n\nBy: ${signerName}\n\n_____________________________`;
-      }
-    );
 
     // Configure marked options
     marked.setOptions({
@@ -319,47 +308,6 @@ export default function PDFPreview({ content, placeholderValues }) {
           margin-bottom: 16px;
           text-align: justify;
           font-size: 12pt;
-        }
-
-        .preview-content p:has(+ p:last-child),
-        .preview-content p:last-child {
-          position: relative;
-          margin-top: 60px;
-          text-align: left;
-          padding-top: 40px;
-        }
-
-        .preview-content p:has(+ p:last-child)::before,
-        .preview-content p:last-child::before {
-          content: "";
-          position: absolute;
-          top: 30px;
-          left: 0;
-          width: 250px;
-          border-top: 1px solid #000;
-        }
-
-        /* Name styling */
-        .preview-content p:has(+ p:last-child) strong,
-        .preview-content p:last-child strong {
-          display: block;
-          margin-top: 4px;
-          font-weight: bold;
-        }
-
-        /* Role/title styling */
-        .preview-content p:has(+ p:last-child) em,
-        .preview-content p:last-child em {
-          display: block;
-          margin-top: 4px;
-          font-style: normal;
-          color: #666;
-          font-size: 0.9em;
-        }
-
-        /* Add equal spacing between signature blocks */
-        .preview-content p:has(+ p:last-child) {
-          margin-bottom: 60px;
         }
 
         /* Hide scrollbar but keep functionality */
