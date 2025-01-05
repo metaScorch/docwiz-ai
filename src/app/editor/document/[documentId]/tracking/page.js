@@ -59,6 +59,20 @@ export default function TrackingPage({ params }) {
   const documentData = document.document || {};
   const signingTracking = document.signing_tracking || [];
 
+  // Find placeholder values for signers
+  const placeholderValues = document.placeholder_values || [];
+  const signerPlaceholders = placeholderValues.filter((p) => p.signer);
+
+  // Map signers with their display values
+  const signersWithValues = documentData.signers.map((signer) => {
+    const placeholder = placeholderValues.find((p) => p.name === signer.name);
+    return {
+      ...signer,
+      displayName: placeholder?.value || signer.name,
+      placeholderName: signer.name,
+    };
+  });
+
   return (
     <div className="container mx-auto p-6">
       {/* Header Section */}
@@ -86,7 +100,10 @@ export default function TrackingPage({ params }) {
 
         {/* Right Column - Status and Timeline */}
         <div className="space-y-6">
-          <SigningStatus document={document} />
+          <SigningStatus
+            document={document}
+            signersWithValues={signersWithValues}
+          />
           <Timeline events={signingTracking} />
         </div>
       </div>
