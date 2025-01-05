@@ -48,6 +48,7 @@
     "openai": "^4.76.0",
     "pdfjs-dist": "^3.4.120",
     "react": "^19.0.0",
+    "react-day-picker": "^8.10.1",
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.54.0",
     "react-hot-toast": "^2.4.1",
