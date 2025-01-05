@@ -183,12 +183,14 @@ export default function EditorPage({ params }) {
               autoFocus
             />
           ) : (
-            <h1
-              className="text-3xl font-bold cursor-pointer hover:opacity-80"
-              onClick={() => setIsEditingTitle(true)}
-            >
-              {userDocument.title}
-            </h1>
+            <>
+              <h1
+                className="text-3xl font-bold cursor-pointer hover:opacity-80"
+                onClick={() => setIsEditingTitle(true)}
+              >
+                {userDocument.title}
+              </h1>
+            </>
           )}
           <div className="space-x-4">
             <Button variant="outline" onClick={() => router.back()}>
@@ -216,6 +218,11 @@ export default function EditorPage({ params }) {
         documentId={documentId}
         onImproveFormatting={handleImproveFormatting}
       />
+
+      <div className="mt-4 text-sm text-muted-foreground bg-muted p-3 rounded-md">
+        ℹ️ A dedicated signature page will be automatically added at the end of
+        your document - no need to add signature fields manually
+      </div>
 
       <LoadingModal isOpen={isFormatting} onCancel={handleCancelFormatting} />
     </div>
