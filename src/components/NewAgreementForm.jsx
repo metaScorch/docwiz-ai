@@ -62,14 +62,16 @@ export function NewAgreementForm() {
     setGenerationStep(0);
 
     try {
-      // Simulate progressive steps
-      for (let i = 0; i < generationSteps.length - 1; i++) {
-        // Use 4000ms delay for the "Writing" step (index 4), otherwise use 2000ms
-        const delay = i === 4 ? 4000 : 2000;
-        await new Promise(resolve => setTimeout(resolve, delay));
-        setGenerationStep(i + 1);
-      }
+      // Start the loading states animation immediately
+      const loadingStatesPromise = (async () => {
+        for (let i = 0; i < generationSteps.length - 1; i++) {
+          const delay = i === 4 ? 4000 : 2000;
+          await new Promise(resolve => setTimeout(resolve, delay));
+          setGenerationStep(i + 1);
+        }
+      })();
 
+      // Make the API call in parallel
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
@@ -90,7 +92,10 @@ export function NewAgreementForm() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
 
-      // Just redirect to the document created by the API
+      // Wait for both the loading states and API call to complete
+      await loadingStatesPromise;
+
+      // Redirect to the document
       router.push(`/editor/document/${data.id}`);
     } catch (error) {
       console.error('Error:', error);

@@ -49,7 +49,7 @@ export async function POST(req) {
     };
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "chatgpt-4o-latest",
       messages: [
         {
           role: "system",
@@ -96,12 +96,12 @@ Additional Requirements:
         .replace(/^```json\s*|\s*```$/g, "");
       parsedResponse = JSON.parse(cleanedResponse);
 
-      // Validate and restructure the response
-      const documentDetails = parsedResponse["Document Details"];
+      // Update these lines to match the API response format
+      const documentDetails = parsedResponse["DocumentDetails"];
       const placeholders = parsedResponse["Placeholders"];
 
       if (!documentDetails || !placeholders) {
-        throw new Error("Missing Document Details or Placeholders");
+        throw new Error("Missing DocumentDetails or Placeholders");
       }
 
       // Initialize placeholder values with empty values
