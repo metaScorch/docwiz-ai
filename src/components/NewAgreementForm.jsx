@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useRouter } from "next/navigation";
-import { Wand2 } from "lucide-react"; // Import the magic wand icon
+import { Wand2, Check, Loader2 } from "lucide-react"; // Import the magic wand icon
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { Select } from "@/components/ui/select";
 import { JurisdictionSearch } from "@/components/JurisdictionSearch";
@@ -18,6 +18,15 @@ export function NewAgreementForm() {
   const [complexity, setComplexity] = useState(3);
   const [length, setLength] = useState(3);
   const [jurisdictionError, setJurisdictionError] = useState(false);
+  const [generationStep, setGenerationStep] = useState(0);
+
+  const generationSteps = [
+    "Understanding the requirement",
+    "Looking up relevant laws",
+    "Checking jurisdiction specific laws",
+    "Writing your agreement based on research",
+    "Finalizing your agreement"
+  ];
 
   useEffect(() => {
     const fetchUserRegistration = async () => {
@@ -43,15 +52,21 @@ export function NewAgreementForm() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Add jurisdiction validation
     if (!jurisdiction) {
       setJurisdictionError(true);
       return;
     }
     setJurisdictionError(false);
     setLoading(true);
+    setGenerationStep(0);
 
     try {
+      // Simulate progressive steps
+      for (let i = 0; i < generationSteps.length - 1; i++) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        setGenerationStep(i + 1);
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
@@ -79,6 +94,7 @@ export function NewAgreementForm() {
       // Add error handling/notification here
     } finally {
       setLoading(false);
+      setGenerationStep(0);
     }
   };
 
@@ -103,6 +119,28 @@ export function NewAgreementForm() {
     };
     return labels[value];
   };
+
+  const LoadingStates = () => (
+    <div className="space-y-2 mt-4">
+      {generationSteps.map((step, index) => {
+        const isComplete = index < generationStep;
+        const isCurrent = index === generationStep;
+        
+        return (
+          <div key={step} className="flex items-center gap-2 text-sm">
+            {isComplete ? (
+              <Check className="h-4 w-4 text-green-500" />
+            ) : isCurrent ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : null}
+            <span className={isComplete ? "text-green-500" : "text-muted-foreground"}>
+              {step}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -181,6 +219,8 @@ Example: I need a non-disclosure agreement for a freelance developer who will be
       <Button type="submit" className="w-full" disabled={loading}>
         {loading ? "Generating..." : "Generate Agreement"}
       </Button>
+
+      {loading && <LoadingStates />}
     </form>
   );
 }
