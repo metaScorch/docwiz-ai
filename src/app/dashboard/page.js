@@ -366,6 +366,8 @@ export default function DashboardPage() {
         .from("templates")
         .select("*, placeholder_values")
         .eq("ai_gen_template", true)
+        .eq("is_active", true)
+        .eq("is_public", true)
         .order("created_at", { ascending: false });
 
       if (error) throw error;

@@ -93,6 +93,8 @@ export async function POST(req) {
          - "pattern": Optional regex pattern for validation
       - "signer" (boolean): **Optional**, include only if the placeholder represents a signing party's name
 
+Important: Do not include any signature blocks, signature lines, or signature sections in the document content. These will be handled separately by the system.
+
 Note: Always include JURISDICTION as a required placeholder.
 
 The document should be between ${wordCountRanges[length || 3].min} and ${wordCountRanges[length || 3].max} words.
@@ -131,6 +133,8 @@ Complexity Level: ${complexityLevels[complexity || 3]}`,
               content: parsedResponse["Document Details"].content,
               placeholder_values: parsedResponse["Placeholders"],
               ai_gen_template: true,
+              is_active: true,
+              is_public: true,
             },
           ])
           .select()

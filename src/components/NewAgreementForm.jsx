@@ -22,6 +22,7 @@ export function NewAgreementForm() {
 
   const generationSteps = [
     "Understanding the requirement",
+    "Retrieving the context",
     "Looking up relevant laws",
     "Checking jurisdiction specific laws",
     "Writing your agreement based on research",
