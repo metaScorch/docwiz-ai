@@ -64,7 +64,9 @@ export function NewAgreementForm() {
     try {
       // Simulate progressive steps
       for (let i = 0; i < generationSteps.length - 1; i++) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Use 4000ms delay for the "Writing" step (index 4), otherwise use 2000ms
+        const delay = i === 4 ? 4000 : 2000;
+        await new Promise(resolve => setTimeout(resolve, delay));
         setGenerationStep(i + 1);
       }
 
