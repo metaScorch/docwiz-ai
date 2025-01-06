@@ -2,11 +2,12 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useRouter } from "next/navigation";
-import { Wand2, Check, Loader2 } from "lucide-react"; // Import the magic wand icon
+import { Wand2, Check, Loader2, AlertCircle } from "lucide-react"; // Import the magic wand icon
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { Select } from "@/components/ui/select";
 import { JurisdictionSearch } from "@/components/JurisdictionSearch";
 import { Slider } from "@/components/ui/slider";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 
 export function NewAgreementForm() {
   const router = useRouter();
@@ -19,6 +20,8 @@ export function NewAgreementForm() {
   const [length, setLength] = useState(3);
   const [jurisdictionError, setJurisdictionError] = useState(false);
   const [generationStep, setGenerationStep] = useState(0);
+  const [legalityError, setLegalityError] = useState(null);
+  const [rateLimitError, setRateLimitError] = useState(null);
 
   const generationSteps = [
     "Understanding the requirement",
@@ -52,6 +55,10 @@ export function NewAgreementForm() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Reset errors at the start
+    setRateLimitError(null);
+    setLegalityError(null);
     
     if (!jurisdiction) {
       setJurisdictionError(true);
@@ -90,16 +97,42 @@ export function NewAgreementForm() {
       });
 
       const data = await response.json();
+      
+      // Handle rate limit response FIRST
+      if (response.status === 429) {
+        setRateLimitError({
+          message: "Error generating agreement",
+          details: "Rate limit exceeded",
+          resetIn: data.resetIn
+        });
+        setLoading(false);
+        return;
+      }
+      
+      // Then handle other responses
+      if (response.status === 422) {
+        setLegalityError({
+          message: "This agreement cannot be generated",
+          details: data.legalityNotes
+        });
+        setLoading(false);
+        return;
+      }
+
       if (!response.ok) throw new Error(data.error);
 
       // Wait for both the loading states and API call to complete
       await loadingStatesPromise;
 
-      // Redirect to the document
+      // Only redirect if everything is successful
       router.push(`/editor/document/${data.id}`);
+
     } catch (error) {
       console.error('Error:', error);
-      // Add error handling/notification here
+      setLegalityError({
+        message: "Error generating agreement",
+        details: error.message
+      });
     } finally {
       setLoading(false);
       setGenerationStep(0);
@@ -150,8 +183,40 @@ export function NewAgreementForm() {
     </div>
   );
 
+  const formatTimeRemaining = (seconds) => {
+    // Input is already in seconds, no need to convert from timestamp
+    if (seconds < 60) return `${seconds} seconds`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes} minute${minutes > 1 ? 's' : ''}`;
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    return `${hours} hour${hours > 1 ? 's' : ''} ${remainingMinutes > 0 ? `and ${remainingMinutes} minute${remainingMinutes > 1 ? 's' : ''}` : ''}`;
+  };
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {legalityError && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>{legalityError.message}</AlertTitle>
+          <AlertDescription>
+            {legalityError.details}
+          </AlertDescription>
+        </Alert>
+      )}
+      {rateLimitError && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error generating agreement</AlertTitle>
+          <AlertDescription className="space-y-2">
+            <p>Ouch, You've hit usage limits, Contact support for higher limits</p>
+           
+            <b>
+              Please try again in {formatTimeRemaining(rateLimitError.resetIn)}
+            </b>
+          </AlertDescription>
+        </Alert>
+      )}
       <div className="space-y-2">
         <div className="flex items-center gap-2 mb-2">
           <Wand2 className="h-4 w-4" />

@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 import { useState } from "react";
 
 export default function Sidebar({ documentValues, onValueChange }) {
-  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [openCalendars, setOpenCalendars] = useState({});
 
   const hasValues = documentValues && Object.keys(documentValues).length > 0;
 
@@ -34,7 +34,15 @@ export default function Sidebar({ documentValues, onValueChange }) {
     switch (format.type) {
       case "date":
         return (
-          <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+          <Popover
+            open={openCalendars[name]}
+            onOpenChange={(open) =>
+              setOpenCalendars((prev) => ({
+                ...prev,
+                [name]: open,
+              }))
+            }
+          >
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
@@ -58,7 +66,10 @@ export default function Sidebar({ documentValues, onValueChange }) {
                     ? dateFormat(date, "MM-dd-yyyy")
                     : "";
                   onValueChange(name, formattedDate);
-                  setCalendarOpen(false);
+                  setOpenCalendars((prev) => ({
+                    ...prev,
+                    [name]: false,
+                  }));
                 }}
                 initialFocus
               />
