@@ -250,6 +250,7 @@ export default function PreviewPage({ params }) {
           <PDFPreview
             content={document.content}
             placeholderValues={document.placeholder_values}
+            signers={signers}
           />
         </div>
 

@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import html2pdf from "html2pdf.js";
 
-export default function PDFPreview({ content, placeholderValues }) {
+export default function PDFPreview({ content, placeholderValues, signers }) {
   const [processedContent, setProcessedContent] = useState("");
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -273,8 +273,27 @@ export default function PDFPreview({ content, placeholderValues }) {
         <div
           ref={previewRef}
           className="preview-content bg-white p-8 shadow-lg h-full overflow-auto relative"
-          dangerouslySetInnerHTML={{ __html: processedContent }}
-        />
+        >
+          <div dangerouslySetInnerHTML={{ __html: processedContent }} />
+
+          {/* Dynamic Signature Page */}
+          <div className="signature-page mt-8 page-break-before">
+            <h2 className="text-center mb-6">Signatures</h2>
+            <div className="flex flex-col gap-8">
+              {signers &&
+                signers.map((signer, index) => (
+                  <div key={index} className="signature-block">
+                    <div className="border-b border-black w-64 h-8 mb-2"></div>
+                    <p className="text-sm font-semibold">{signer.value}</p>
+                    <p className="text-sm text-gray-600 mb-1">
+                      {signer.description || "Signer"}
+                    </p>
+                    <p className="text-sm mt-1">Date: _____________________</p>
+                  </div>
+                ))}
+            </div>
+          </div>
+        </div>
       </div>
 
       <style jsx global>{`
@@ -319,6 +338,21 @@ export default function PDFPreview({ content, placeholderValues }) {
           .preview-content {
             height: auto;
             overflow: visible;
+          }
+        }
+
+        .signature-page {
+          padding-top: 40px;
+          border-top: 1px solid #eee;
+        }
+
+        .page-break-before {
+          page-break-before: always;
+        }
+
+        @media print {
+          .signature-page {
+            break-before: page;
           }
         }
       `}</style>
