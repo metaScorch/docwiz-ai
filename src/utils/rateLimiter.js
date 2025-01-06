@@ -17,7 +17,7 @@ const supabase = createClient(
 // Create limiters
 const globalLimiter = new Ratelimit({
   redis,
-  limiter: Ratelimit.slidingWindow(10000, "1 d"), // 100 requests per day globally
+  limiter: Ratelimit.slidingWindow(10000, "1 d"), // 100000 requests per day globally
   prefix: "ratelimit:global",
 });
 
