@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { useRouter, useSearchParams } from "next/navigation";
-import { toast } from "sonner";
+import { useEffect, useState, Suspense } from "react";
 import { Mail } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { toast } from "sonner";
 
-export default function VerifyEmail() {
+// Create a separate component for the verification content
+function VerificationContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createClientComponentClient();
@@ -171,5 +172,22 @@ export default function VerifyEmail() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+// Main component with Suspense wrapper
+export default function VerifyEmail() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gradient-to-r from-blue-100 to-purple-100 flex items-center justify-center">
+          <Card className="w-full max-w-md p-6">
+            <div className="text-center">Loading...</div>
+          </Card>
+        </div>
+      }
+    >
+      <VerificationContent />
+    </Suspense>
   );
 }
