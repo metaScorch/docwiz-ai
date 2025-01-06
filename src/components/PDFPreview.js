@@ -149,44 +149,122 @@ export default function PDFPreview({ content, placeholderValues, signers }) {
     try {
       // Clone the element to manipulate it without affecting the display
       const clonedElement = element.cloneNode(true);
-      const tempContainer = document.createElement("div");
-      tempContainer.appendChild(clonedElement);
 
-      // Reset scroll and height properties for proper PDF generation
-      clonedElement.style.height = "auto";
-      clonedElement.style.maxHeight = "none";
-      clonedElement.style.overflow = "visible";
-      clonedElement.style.position = "relative";
+      // Create a temporary container
+      const tempDiv = document.createElement("div");
+      tempDiv.style.position = "absolute";
+      tempDiv.style.left = "-9999px";
+      tempDiv.style.width = "210mm"; // A4 width
+      tempDiv.style.minHeight = "297mm"; // A4 height
+      tempDiv.style.visibility = "hidden";
+      document.body.appendChild(tempDiv);
+
+      // Add the same HTML structure and styling as print, including signature styles
+      tempDiv.innerHTML = `
+        <div style="
+          margin: 0;
+          font-family: 'Times New Roman', serif;
+          width: 100%;
+        ">
+          <div class="preview-content" style="
+            font-family: 'Times New Roman', serif;
+            line-height: 1.8;
+            color: #1a1a1a;
+            padding: 0 40px;
+            width: 100%;
+            position: relative;
+          ">
+            ${clonedElement.innerHTML}
+          </div>
+        </div>
+      `;
+
+      // Add signature page styles
+      const styleElement = document.createElement("style");
+      styleElement.textContent = `
+        .signature-page {
+          padding-top: 40px;
+          border-top: 1px solid #eee;
+          page-break-before: always;
+        }
+        .signature-block {
+          margin-bottom: 2em;
+        }
+        .signature-block .border-b {
+          border-bottom: 1px solid black;
+          display: block;
+          width: 240px;
+          height: 32px;
+          margin-bottom: 8px;
+        }
+      `;
+      tempDiv.appendChild(styleElement);
+
+      // Force layout calculation
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      const contentHeight = tempDiv.scrollHeight;
+      const a4Height = 297; // height in mm
+      const a4HeightPx = a4Height * 3.78; // rough px to mm conversion
+      const totalPages = Math.ceil(contentHeight / a4HeightPx);
 
       const opt = {
-        margin: [20, 20],
+        margin: 20,
         filename: "document.pdf",
         image: { type: "jpeg", quality: 0.98 },
         html2canvas: {
           scale: 2,
           scrollY: 0,
-          windowHeight: element.scrollHeight,
-          height: element.scrollHeight,
+          height: contentHeight,
+          windowHeight: contentHeight,
+          useCORS: true,
+          logging: true,
+          onclone: (element) => {
+            // Ensure all content is visible in the cloned element
+            const content = element.querySelector(".preview-content");
+            if (content) {
+              content.style.height = "auto";
+              content.style.overflow = "visible";
+              content.style.position = "relative";
+            }
+
+            // Ensure signature page styling is preserved
+            const signaturePage = element.querySelector(".signature-page");
+            if (signaturePage) {
+              signaturePage.style.pageBreakBefore = "always";
+              signaturePage.style.paddingTop = "40px";
+              signaturePage.style.borderTop = "1px solid #eee";
+            }
+          },
         },
         jsPDF: {
           unit: "mm",
           format: "a4",
           orientation: "portrait",
+          compress: true,
+          putTotalPages: true,
         },
       };
 
-      // Create temporary container for PDF generation
-      const tempDiv = document.createElement("div");
-      tempDiv.style.position = "absolute";
-      tempDiv.style.left = "-9999px";
-      tempDiv.style.top = "0";
-      tempDiv.appendChild(clonedElement);
-      document.body.appendChild(tempDiv);
-
       try {
-        await html2pdf().set(opt).from(clonedElement).save();
+        await html2pdf()
+          .set(opt)
+          .from(tempDiv.firstElementChild)
+          .toPdf()
+          .get("pdf")
+          .then((pdf) => {
+            pdf.setProperties({
+              title: "Document",
+              subject: "Document",
+              creator: "Your App",
+              author: "Your App",
+              keywords: "document, pdf",
+              producer: "html2pdf.js",
+            });
+            return pdf;
+          })
+          .save();
       } finally {
-        // Clean up
         document.body.removeChild(tempDiv);
       }
     } catch (error) {
@@ -225,6 +303,7 @@ export default function PDFPreview({ content, placeholderValues, signers }) {
 
         {/* Right side: Download and Print buttons */}
         <div className="flex gap-2">
+          {/* Temporarily hidden download button
           <Button
             variant="outline"
             size="sm"
@@ -235,6 +314,7 @@ export default function PDFPreview({ content, placeholderValues, signers }) {
             <Download size={16} />
             {isGeneratingPDF ? "Generating PDF..." : "Download PDF"}
           </Button>
+          */}
           <Button
             variant="outline"
             size="sm"
