@@ -5,6 +5,7 @@ import { formatDistanceToNow } from "date-fns";
 export default function SigningStatus({ document }) {
   const documentData = document.document || {};
   const signers = documentData.signers || [];
+  const placeholderValues = document.placeholder_values || [];
 
   const getStatusColor = (status) => {
     switch (status?.toLowerCase()) {
@@ -18,6 +19,11 @@ export default function SigningStatus({ document }) {
       default:
         return "bg-gray-500";
     }
+  };
+
+  const getSignerDisplayName = (signerName) => {
+    const placeholder = placeholderValues.find((p) => p.name === signerName);
+    return placeholder?.value || signerName;
   };
 
   return (
@@ -46,7 +52,12 @@ export default function SigningStatus({ document }) {
         {signers.map((signer, index) => (
           <div key={index} className="border rounded-lg p-3">
             <div className="flex items-center justify-between mb-1">
-              <span className="font-medium">{signer.name}</span>
+              <div>
+                <span className="font-medium">
+                  {getSignerDisplayName(signer.name)}
+                </span>
+                <div className="text-xs text-gray-500">{signer.name}</div>
+              </div>
               <Badge className={getStatusColor(signer.status)}>
                 {signer.status}
               </Badge>

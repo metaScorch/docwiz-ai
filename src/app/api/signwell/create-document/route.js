@@ -78,7 +78,6 @@ export async function POST(request) {
         message: "Please sign this document",
       })),
       draft: false,
-      with_signature_page: false,
       reminders: true,
       apply_signing_order: false,
       embedded_signing: false,
@@ -86,22 +85,7 @@ export async function POST(request) {
       text_tags: false,
       allow_decline: true,
       allow_reassign: true,
-      fields: [
-        // One array for each file
-        signers.flatMap((signer, signerIndex) =>
-          (signer.fields || []).map((field, fieldIndex) => ({
-            type: "signature",
-            page: parseInt(field.page),
-            x: Math.max(0, Math.round(field.x)),
-            y: Math.max(0, Math.round(field.y)),
-            width: Math.round(field.width || 120),
-            height: Math.round(field.height || 60),
-            required: true,
-            recipient_id: `recipient_${signerIndex + 1}`,
-            name: `signature_field_${signerIndex + 1}_${fieldIndex + 1}`,
-          }))
-        ),
-      ],
+      with_signature_page: true,
     };
 
     // Log the final payload for verification

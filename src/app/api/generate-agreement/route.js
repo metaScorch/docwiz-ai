@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { checkRateLimit, trackAPIUsage } from "@/utils/rateLimiter";
 
 // Initialize OpenAI
 const openai = new OpenAI({
@@ -22,6 +23,20 @@ export async function POST(req) {
   try {
     const { prompt, userId, jurisdiction, complexity, length } =
       await req.json();
+
+    // Check rate limits
+    const rateLimit = await checkRateLimit(userId);
+    if (!rateLimit.success) {
+      return NextResponse.json(
+        {
+          error: "Rate limit exceeded",
+          message: "Rate limit exceeded",
+          details: "Too many requests. Please try again later.",
+          resetIn: rateLimit.resetIn || 3600, // Default to 1 hour if not provided
+        },
+        { status: 429 }
+      );
+    }
 
     if (!userId || !jurisdiction) {
       return NextResponse.json(
@@ -49,7 +64,7 @@ export async function POST(req) {
     };
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "chatgpt-4o-latest",
       messages: [
         {
           role: "system",
@@ -58,7 +73,9 @@ export async function POST(req) {
 1. **Document Details**:
    - "title" (string): A concise name for the document.
    - "description" (string): A brief explanation of the document's purpose.
-   - "content" (string): The main body of the document written in Markdown format. Include placeholders for dynamic fields in the format "{{PLACEHOLDER_NAME}}" where appropriate.
+   - "content" (string): The main body of the document written in Markdown format. Include placeholders for dynamic fields in the format "{{PLACEHOLDER_NAME}}" where appropriate. DO NOT include any signature blocks or signature sections at the end of the document as these will be handled separately.
+   - "isLegal" (boolean): Indicate whether the requested agreement is legal in the specified jurisdiction.
+   - "legalityNotes" (string): Optional explanation if the agreement is not legal.
 
 2. **Placeholders**:
    - A list of all placeholders used in the "content" field. Each placeholder must be represented as an object with:
@@ -70,7 +87,7 @@ export async function POST(req) {
          - "pattern": Optional regex pattern for validation.
       - "signer" (boolean): **Optional**, include only if the placeholder represents a signing party's name.
 
-Ensure the "signer" field is only included when required for identifying signing parties' names. Exclude it for all other placeholders, including signature fields.
+Important: Do not include any signature blocks, signature lines, or signature sections in the document content. These will be handled separately by the system.
 
 The output must be valid JSON and strictly adhere to the described format.
 
@@ -86,6 +103,15 @@ Additional Requirements:
       temperature: 0.3,
     });
 
+    // Track API usage
+    await trackAPIUsage({
+      userId,
+      endpoint: "generate-agreement",
+      tokensUsed: completion.usage?.total_tokens || 0,
+      cost: (completion.usage?.total_tokens || 0) * 0.00002, // Approximate cost calculation
+      registrationId: null, // Add if available
+    });
+
     const response = completion.choices[0].message.content;
     let parsedResponse;
 
@@ -96,12 +122,13 @@ Additional Requirements:
         .replace(/^```json\s*|\s*```$/g, "");
       parsedResponse = JSON.parse(cleanedResponse);
 
-      // Validate and restructure the response
-      const documentDetails = parsedResponse["Document Details"];
+      // Try both formats: "Document Details" and "DocumentDetails"
+      const documentDetails =
+        parsedResponse["Document Details"] || parsedResponse["DocumentDetails"];
       const placeholders = parsedResponse["Placeholders"];
 
       if (!documentDetails || !placeholders) {
-        throw new Error("Missing Document Details or Placeholders");
+        throw new Error("Missing DocumentDetails or Placeholders");
       }
 
       // Initialize placeholder values with empty values
@@ -136,12 +163,26 @@ Additional Requirements:
         );
       }
 
+      // Check if the agreement is legal before proceeding
+      if (documentDetails.isLegal === false) {
+        return NextResponse.json(
+          {
+            isLegal: false,
+            legalityNotes:
+              documentDetails.legalityNotes ||
+              "This agreement is not legal in the specified jurisdiction.",
+          },
+          { status: 422 }
+        );
+      }
+
       return NextResponse.json({
         id: document.id,
         title: documentDetails.title,
         description: documentDetails.description,
         content: documentDetails.content,
         placeholder_values: placeholderValues,
+        isLegal: documentDetails.isLegal ?? true,
       });
     } catch (error) {
       console.error("JSON parsing error:", error, "Raw response:", response);

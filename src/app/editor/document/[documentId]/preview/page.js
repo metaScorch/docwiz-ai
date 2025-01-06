@@ -8,7 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import PDFPreview from "@/components/PDFPreview";
 import { toast } from "sonner";
-import { generatePDF } from "@/components/PDFGenerator";
+import {
+  generatePreviewPDF,
+  generateSignwellPDF,
+} from "@/components/PDFGenerator";
+import { Loader2 } from "lucide-react";
 
 export default function PreviewPage({ params }) {
   const documentId = use(params).documentId;
@@ -96,8 +100,8 @@ export default function PreviewPage({ params }) {
         return;
       }
 
-      // Generate PDF with content and placeholder values
-      const pdfBlob = await generatePDF(
+      // Update PDF generation to use generateSignwellPDF
+      const pdfBlob = await generateSignwellPDF(
         document.content,
         document.placeholder_values
       );
@@ -211,6 +215,7 @@ export default function PreviewPage({ params }) {
           <PDFPreview
             content={document.content}
             placeholderValues={document.placeholder_values}
+            signers={signers}
           />
         </div>
 

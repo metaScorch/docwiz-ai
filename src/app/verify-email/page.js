@@ -4,12 +4,13 @@ import { useEffect, useState } from "react";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Mail } from "lucide-react";
 
 export default function VerifyEmail() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClientComponentClient();
   const [countdown, setCountdown] = useState(60);
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -29,16 +30,22 @@ export default function VerifyEmail() {
     const checkEmailVerification = async () => {
       try {
         const {
-          data: { user },
-          error,
-        } = await supabase.auth.getUser();
+          data: { session },
+        } = await supabase.auth.getSession();
 
-        if (error) throw error;
+        // Only proceed with verification check if we have a session
+        if (session) {
+          const {
+            data: { user },
+            error,
+          } = await supabase.auth.getUser();
 
-        if (user?.email_confirmed_at) {
-          // Clear any existing sessions to ensure a fresh login
-          await supabase.auth.refreshSession();
-          router.push("/dashboard");
+          if (error) throw error;
+
+          if (user?.email_confirmed_at) {
+            await supabase.auth.refreshSession();
+            router.push("/dashboard");
+          }
         }
       } catch (error) {
         console.error("Error checking verification:", error);
@@ -60,8 +67,13 @@ export default function VerifyEmail() {
 
         if (error) throw error;
 
-        // If no session, redirect to sign in
+        // If no session, check for email in URL params
         if (!session) {
+          const emailFromUrl = searchParams.get("email");
+          if (emailFromUrl) {
+            setUserEmail(emailFromUrl);
+            return;
+          }
           router.push("/sign-in");
           return;
         }
@@ -90,13 +102,14 @@ export default function VerifyEmail() {
       clearInterval(cooldownTimer);
       clearInterval(verificationChecker);
     };
-  }, [router, supabase.auth]);
+  }, [router, supabase.auth, searchParams]);
 
   const handleResendEmail = async () => {
     try {
       setLoading(true);
       const { error } = await supabase.auth.resend({
         type: "signup",
+        email: userEmail,
       });
 
       if (error) throw error;

@@ -24,13 +24,19 @@ const steps = [
 export default function OnboardingForm() {
   const [currentStep, setCurrentStep] = useState(0);
   const [formData, setFormData] = useState({});
+  const [error, setError] = useState(null);
 
   const handleNext = (stepData) => {
-    console.log("Current formData:", formData); // Debug log
-    console.log("New stepData:", stepData); // Debug log
+    if (!stepData.error) {
+      setError(null);
+      setFormData({ ...formData, ...stepData });
+      setCurrentStep((prev) => Math.min(prev + 1, steps.length - 1));
+    }
+  };
 
-    setFormData({ ...formData, ...stepData });
-    setCurrentStep((prev) => Math.min(prev + 1, steps.length - 1));
+  const handleError = (errorMessage) => {
+    setError(errorMessage);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   console.log("Rendered with formData:", formData); // Debug log
@@ -41,13 +47,12 @@ export default function OnboardingForm() {
 
   const handleSubmit = () => {
     console.log("Form submitted:", formData);
-    // Here you would typically send the data to your backend
   };
 
   const renderStep = () => {
     switch (currentStep) {
       case 0:
-        return <SignupStep onNext={handleNext} />;
+        return <SignupStep onNext={handleNext} onError={handleError} />;
       case 1:
         return (
           <OrganizationTypeStep
@@ -82,7 +87,21 @@ export default function OnboardingForm() {
             {currentStep > 0 ? steps[currentStep] : ""}
           </CardTitle>
         </CardHeader>
-        <CardContent>{renderStep()}</CardContent>
+        <CardContent>
+          {error && (
+            <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+              {error}
+              <Button
+                variant="link"
+                className="text-red-700 hover:text-red-900 ml-2"
+                onClick={() => (window.location.href = "/sign-in")}
+              >
+                Sign in
+              </Button>
+            </div>
+          )}
+          {renderStep()}
+        </CardContent>
         <CardFooter className="flex flex-col gap-4">
           <div className="flex justify-between w-full">
             <Button

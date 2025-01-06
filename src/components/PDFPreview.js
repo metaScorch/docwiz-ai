@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import html2pdf from "html2pdf.js";
 
-export default function PDFPreview({ content, placeholderValues }) {
+export default function PDFPreview({ content, placeholderValues, signers }) {
   const [processedContent, setProcessedContent] = useState("");
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -38,26 +38,15 @@ export default function PDFPreview({ content, placeholderValues }) {
     console.log("placeholderValues:", placeholderValues); // Debug log
     console.log("placeholderMap:", placeholderMap); // Debug log
 
-    // First pass: replace placeholders with their values
+    // Replace placeholders with their values
     const regex = /\{\{([^}]+)\}\}/g;
     processedText = processedText.replace(regex, (match, placeholderName) => {
       const placeholder = placeholderMap[placeholderName];
       if (placeholder && placeholder.value) {
         return placeholder.value;
       }
-      // If no value or placeholder not found, keep the original placeholder
       return match;
     });
-
-    // Special handling for signature placeholders with improved formatting
-    processedText = processedText.replace(
-      /\{\{(COMPANY|INVESTOR)_NAME\}\}\n\nBy: \{\{(COMPANY|INVESTOR)_SIGNER_NAME\}\}/g,
-      (match, type, signerType) => {
-        const name = placeholderMap[`${type}_NAME`]?.value;
-        const signerName = placeholderMap[`${type}_SIGNER_NAME`]?.value;
-        return `${name}\n\nBy: ${signerName}\n\n_____________________________`;
-      }
-    );
 
     // Configure marked options
     marked.setOptions({
@@ -160,44 +149,122 @@ export default function PDFPreview({ content, placeholderValues }) {
     try {
       // Clone the element to manipulate it without affecting the display
       const clonedElement = element.cloneNode(true);
-      const tempContainer = document.createElement("div");
-      tempContainer.appendChild(clonedElement);
 
-      // Reset scroll and height properties for proper PDF generation
-      clonedElement.style.height = "auto";
-      clonedElement.style.maxHeight = "none";
-      clonedElement.style.overflow = "visible";
-      clonedElement.style.position = "relative";
+      // Create a temporary container
+      const tempDiv = document.createElement("div");
+      tempDiv.style.position = "absolute";
+      tempDiv.style.left = "-9999px";
+      tempDiv.style.width = "210mm"; // A4 width
+      tempDiv.style.minHeight = "297mm"; // A4 height
+      tempDiv.style.visibility = "hidden";
+      document.body.appendChild(tempDiv);
+
+      // Add the same HTML structure and styling as print, including signature styles
+      tempDiv.innerHTML = `
+        <div style="
+          margin: 0;
+          font-family: 'Times New Roman', serif;
+          width: 100%;
+        ">
+          <div class="preview-content" style="
+            font-family: 'Times New Roman', serif;
+            line-height: 1.8;
+            color: #1a1a1a;
+            padding: 0 40px;
+            width: 100%;
+            position: relative;
+          ">
+            ${clonedElement.innerHTML}
+          </div>
+        </div>
+      `;
+
+      // Add signature page styles
+      const styleElement = document.createElement("style");
+      styleElement.textContent = `
+        .signature-page {
+          padding-top: 40px;
+          border-top: 1px solid #eee;
+          page-break-before: always;
+        }
+        .signature-block {
+          margin-bottom: 2em;
+        }
+        .signature-block .border-b {
+          border-bottom: 1px solid black;
+          display: block;
+          width: 240px;
+          height: 32px;
+          margin-bottom: 8px;
+        }
+      `;
+      tempDiv.appendChild(styleElement);
+
+      // Force layout calculation
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      const contentHeight = tempDiv.scrollHeight;
+      const a4Height = 297; // height in mm
+      const a4HeightPx = a4Height * 3.78; // rough px to mm conversion
+      const totalPages = Math.ceil(contentHeight / a4HeightPx);
 
       const opt = {
-        margin: [20, 20],
+        margin: 20,
         filename: "document.pdf",
         image: { type: "jpeg", quality: 0.98 },
         html2canvas: {
           scale: 2,
           scrollY: 0,
-          windowHeight: element.scrollHeight,
-          height: element.scrollHeight,
+          height: contentHeight,
+          windowHeight: contentHeight,
+          useCORS: true,
+          logging: true,
+          onclone: (element) => {
+            // Ensure all content is visible in the cloned element
+            const content = element.querySelector(".preview-content");
+            if (content) {
+              content.style.height = "auto";
+              content.style.overflow = "visible";
+              content.style.position = "relative";
+            }
+
+            // Ensure signature page styling is preserved
+            const signaturePage = element.querySelector(".signature-page");
+            if (signaturePage) {
+              signaturePage.style.pageBreakBefore = "always";
+              signaturePage.style.paddingTop = "40px";
+              signaturePage.style.borderTop = "1px solid #eee";
+            }
+          },
         },
         jsPDF: {
           unit: "mm",
           format: "a4",
           orientation: "portrait",
+          compress: true,
+          putTotalPages: true,
         },
       };
 
-      // Create temporary container for PDF generation
-      const tempDiv = document.createElement("div");
-      tempDiv.style.position = "absolute";
-      tempDiv.style.left = "-9999px";
-      tempDiv.style.top = "0";
-      tempDiv.appendChild(clonedElement);
-      document.body.appendChild(tempDiv);
-
       try {
-        await html2pdf().set(opt).from(clonedElement).save();
+        await html2pdf()
+          .set(opt)
+          .from(tempDiv.firstElementChild)
+          .toPdf()
+          .get("pdf")
+          .then((pdf) => {
+            pdf.setProperties({
+              title: "Document",
+              subject: "Document",
+              creator: "Your App",
+              author: "Your App",
+              keywords: "document, pdf",
+              producer: "html2pdf.js",
+            });
+            return pdf;
+          })
+          .save();
       } finally {
-        // Clean up
         document.body.removeChild(tempDiv);
       }
     } catch (error) {
@@ -236,6 +303,7 @@ export default function PDFPreview({ content, placeholderValues }) {
 
         {/* Right side: Download and Print buttons */}
         <div className="flex gap-2">
+          {/* Temporarily hidden download button
           <Button
             variant="outline"
             size="sm"
@@ -246,6 +314,7 @@ export default function PDFPreview({ content, placeholderValues }) {
             <Download size={16} />
             {isGeneratingPDF ? "Generating PDF..." : "Download PDF"}
           </Button>
+          */}
           <Button
             variant="outline"
             size="sm"
@@ -284,8 +353,27 @@ export default function PDFPreview({ content, placeholderValues }) {
         <div
           ref={previewRef}
           className="preview-content bg-white p-8 shadow-lg h-full overflow-auto relative"
-          dangerouslySetInnerHTML={{ __html: processedContent }}
-        />
+        >
+          <div dangerouslySetInnerHTML={{ __html: processedContent }} />
+
+          {/* Dynamic Signature Page */}
+          <div className="signature-page mt-8 page-break-before">
+            <h2 className="text-center mb-6">Signatures</h2>
+            <div className="flex flex-col gap-8">
+              {signers &&
+                signers.map((signer, index) => (
+                  <div key={index} className="signature-block">
+                    <div className="border-b border-black w-64 h-8 mb-2"></div>
+                    <p className="text-sm font-semibold">{signer.value}</p>
+                    <p className="text-sm text-gray-600 mb-1">
+                      {signer.description || "Signer"}
+                    </p>
+                    <p className="text-sm mt-1">Date: _____________________</p>
+                  </div>
+                ))}
+            </div>
+          </div>
+        </div>
       </div>
 
       <style jsx global>{`
@@ -321,47 +409,6 @@ export default function PDFPreview({ content, placeholderValues }) {
           font-size: 12pt;
         }
 
-        .preview-content p:has(+ p:last-child),
-        .preview-content p:last-child {
-          position: relative;
-          margin-top: 60px;
-          text-align: left;
-          padding-top: 40px;
-        }
-
-        .preview-content p:has(+ p:last-child)::before,
-        .preview-content p:last-child::before {
-          content: "";
-          position: absolute;
-          top: 30px;
-          left: 0;
-          width: 250px;
-          border-top: 1px solid #000;
-        }
-
-        /* Name styling */
-        .preview-content p:has(+ p:last-child) strong,
-        .preview-content p:last-child strong {
-          display: block;
-          margin-top: 4px;
-          font-weight: bold;
-        }
-
-        /* Role/title styling */
-        .preview-content p:has(+ p:last-child) em,
-        .preview-content p:last-child em {
-          display: block;
-          margin-top: 4px;
-          font-style: normal;
-          color: #666;
-          font-size: 0.9em;
-        }
-
-        /* Add equal spacing between signature blocks */
-        .preview-content p:has(+ p:last-child) {
-          margin-bottom: 60px;
-        }
-
         /* Hide scrollbar but keep functionality */
         .preview-content::-webkit-scrollbar {
           width: 0px;
@@ -371,6 +418,21 @@ export default function PDFPreview({ content, placeholderValues }) {
           .preview-content {
             height: auto;
             overflow: visible;
+          }
+        }
+
+        .signature-page {
+          padding-top: 40px;
+          border-top: 1px solid #eee;
+        }
+
+        .page-break-before {
+          page-break-before: always;
+        }
+
+        @media print {
+          .signature-page {
+            break-before: page;
           }
         }
       `}</style>
