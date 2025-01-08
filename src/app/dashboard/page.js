@@ -41,6 +41,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { UserCircle } from "lucide-react";
 import { Loader2 } from "lucide-react";
+import { UpgradeModal } from "@/components/UpgradeModal";
+import { checkDocumentLimit } from "@/utils/usageLimits";
+import { toast } from "sonner";
+import { Toaster } from "sonner";
 
 const STATUS_FILTERS = [
   { value: "all", label: "All" },
@@ -277,6 +281,26 @@ export default function DashboardPage() {
   const [showSignedDocsDialog, setShowSignedDocsDialog] = useState(false);
   const [signedDocsSearchQuery, setSignedDocsSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("all");
+  const [showUpgrade, setShowUpgrade] = useState(false);
+  const [limitData, setLimitData] = useState(null);
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [showTemplateDialog, setShowTemplateDialog] = useState(false);
+
+  const checkLimit = async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        const limitInfo = await checkDocumentLimit(user.id);
+        setLimitData(limitInfo);
+        return limitInfo;
+      }
+    } catch (error) {
+      console.error("Error checking document limit:", error);
+      toast.error("Failed to check document limit");
+    }
+  };
 
   useEffect(() => {
     async function fetchData() {
@@ -349,6 +373,8 @@ export default function DashboardPage() {
           signedDocuments: signedDocs,
           totalParties: parties.size,
         });
+
+        await checkLimit();
       } catch (error) {
         console.error("Error fetching data:", error);
       } finally {
@@ -462,6 +488,55 @@ export default function DashboardPage() {
     );
   });
 
+  // Separate the template selection from document creation
+  const handleTemplateClick = (template) => {
+    setSelectedTemplate(template);
+    handleTemplateLimit(template);
+  };
+
+  // Handle the limit check and document creation
+  const handleTemplateLimit = async (template) => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      // Check limit before creating document
+      const limitInfo = await checkDocumentLimit(user.id);
+      setLimitData(limitInfo);
+
+      if (!limitInfo.allowed) {
+        setShowTemplateDialog(false); // Close template dialog
+        setShowUpgrade(true); // Show upgrade modal
+        return;
+      }
+
+      // Only proceed with document creation if under limit
+      const { data: newDocument, error } = await supabase
+        .from("user_documents")
+        .insert([
+          {
+            user_id: user.id,
+            template_id: template.id,
+            content: template.content,
+            title: template.template_name,
+            status: "draft",
+            placeholder_values: template.placeholder_values,
+          },
+        ])
+        .select()
+        .single();
+
+      if (error) throw error;
+      setShowTemplateDialog(false); // Close template dialog
+      router.push(`/editor/document/${newDocument.id}`);
+    } catch (error) {
+      console.error("Error creating document:", error);
+      toast.error("Failed to create document");
+    }
+  };
+
   if (loading) {
     return (
       <div className="container mx-auto p-6 flex items-center justify-center min-h-screen">
@@ -471,405 +546,402 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      {/* Logo and Account Section */}
-      <div className="flex justify-between items-center mb-8">
-        <Image
-          src="/logo.png"
-          alt="DocWiz Logo"
-          width={180}
-          height={60}
-          priority
-          className="h-auto"
-        />
+    <>
+      <Toaster />
+      <div className="container mx-auto p-6 space-y-6">
+        {/* Logo and Account Section */}
+        <div className="flex justify-between items-center mb-8">
+          <Image
+            src="/logo.png"
+            alt="DocWiz Logo"
+            width={180}
+            height={60}
+            priority
+            className="h-auto"
+          />
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="flex items-center gap-2">
-              <UserCircle className="h-5 w-5" />
-              My Account
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={() => router.push("/profile")}>
-              Profile
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={async () => {
-                try {
-                  // Check subscription status directly from database
-                  const { data: subscription } = await supabase
-                    .from("subscriptions")
-                    .select("status, stripe_subscription_id")
-                    .eq("registration_id", registrations[0]?.id) // Assuming the first registration
-                    .single();
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="flex items-center gap-2">
+                <UserCircle className="h-5 w-5" />
+                My Account
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onClick={() => router.push("/profile")}>
+                Profile
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={async () => {
+                  try {
+                    // Check subscription status directly from database
+                    const { data: subscription } = await supabase
+                      .from("subscriptions")
+                      .select("status, stripe_subscription_id")
+                      .eq("registration_id", registrations[0]?.id) // Assuming the first registration
+                      .single();
 
-                  if (
-                    subscription?.status === "active" &&
-                    subscription?.stripe_subscription_id
-                  ) {
-                    // If subscribed, open customer portal
-                    const response = await fetch("/api/create-billing-portal", {
-                      method: "POST",
-                    });
-                    const { session_url, error } = await response.json();
-                    if (error) throw new Error(error);
-                    window.location.href = session_url;
-                  } else {
-                    // If not subscribed, open pricing page
+                    if (
+                      subscription?.status === "active" &&
+                      subscription?.stripe_subscription_id
+                    ) {
+                      // If subscribed, open customer portal
+                      const response = await fetch(
+                        "/api/create-billing-portal",
+                        {
+                          method: "POST",
+                        }
+                      );
+                      const { session_url, error } = await response.json();
+                      if (error) throw new Error(error);
+                      window.location.href = session_url;
+                    } else {
+                      // If not subscribed, open pricing page
+                      router.push("/pricing");
+                    }
+                  } catch (error) {
+                    console.error("Error handling billing:", error);
+                    // If any error occurs, redirect to pricing page
                     router.push("/pricing");
                   }
-                } catch (error) {
-                  console.error("Error handling billing:", error);
-                  // If any error occurs, redirect to pricing page
-                  router.push("/pricing");
-                }
-              }}
-            >
-              Billing
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={async () => {
-                await supabase.auth.signOut();
-                router.push("/sign-in");
-              }}
-              className="text-red-600"
-            >
-              Logout
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+                }}
+              >
+                Billing
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={async () => {
+                  await supabase.auth.signOut();
+                  router.push("/sign-in");
+                }}
+                className="text-red-600"
+              >
+                Logout
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
 
-      {/* Stats Section */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Total Documents
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalDocuments}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader
-            className="flex flex-row items-center justify-between space-y-0 pb-2 cursor-pointer"
-            onClick={() => setShowSignedDocsDialog(true)}
-          >
-            <CardTitle className="text-sm font-medium">
-              Signed Documents
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div
-              className="text-2xl font-bold cursor-pointer"
+        {/* Stats Section */}
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Total Documents
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.totalDocuments}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader
+              className="flex flex-row items-center justify-between space-y-0 pb-2 cursor-pointer"
               onClick={() => setShowSignedDocsDialog(true)}
             >
-              {stats.signedDocuments}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader
-            className="flex flex-row items-center justify-between space-y-0 pb-2 cursor-pointer"
-            onClick={() => setShowPartiesDialog(true)}
-          >
-            <CardTitle className="text-sm font-medium">Total Parties</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div
-              className="text-2xl font-bold cursor-pointer"
+              <CardTitle className="text-sm font-medium">
+                Signed Documents
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div
+                className="text-2xl font-bold cursor-pointer"
+                onClick={() => setShowSignedDocsDialog(true)}
+              >
+                {stats.signedDocuments}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader
+              className="flex flex-row items-center justify-between space-y-0 pb-2 cursor-pointer"
               onClick={() => setShowPartiesDialog(true)}
             >
-              {stats.totalParties}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+              <CardTitle className="text-sm font-medium">
+                Total Parties
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div
+                className="text-2xl font-bold cursor-pointer"
+                onClick={() => setShowPartiesDialog(true)}
+              >
+                {stats.totalParties}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
-      <div className="flex space-x-4 items-center">
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button className="bg-[#0700c7] text-white hover:bg-[#0700c7]/90">
-              <Wand2 className="mr-1 h-4 w-2" />
-              Generate Agreement Using AI
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>Create New Agreement</DialogTitle>
-            </DialogHeader>
-            <NewAgreementForm />
-          </DialogContent>
-        </Dialog>
-        <div className="text-muted-foreground">or</div>
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button
-              variant="outline"
-              className="bg-white text-[#0700c7] border-[#0700c7] hover:bg-[#0700c7]/10"
-              onClick={fetchTemplates}
-            >
-              Select A Template
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-[900px] max-h-[80vh]">
-            <DialogHeader>
-              <DialogTitle className="text-xl mb-4">
-                Select an AI-Generated Template
-              </DialogTitle>
-              <div className="mb-4">
+        <div className="flex space-x-4 items-center">
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button className="bg-[#0700c7] text-white hover:bg-[#0700c7]/90">
+                <Wand2 className="mr-1 h-4 w-2" />
+                Generate Agreement Using AI
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Create New Agreement</DialogTitle>
+              </DialogHeader>
+              <NewAgreementForm />
+            </DialogContent>
+          </Dialog>
+          <div className="text-muted-foreground">or</div>
+          <Dialog
+            open={showTemplateDialog}
+            onOpenChange={setShowTemplateDialog}
+          >
+            <DialogTrigger asChild>
+              <Button
+                variant="outline"
+                className="bg-white text-[#0700c7] border-[#0700c7] hover:bg-[#0700c7]/10"
+                onClick={fetchTemplates}
+              >
+                Select A Template
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-[900px] max-h-[80vh]">
+              <DialogHeader>
+                <DialogTitle className="text-xl mb-4">
+                  Select A Template To Customize
+                </DialogTitle>
+                <div className="mb-4">
+                  <Input
+                    type="text"
+                    placeholder="Search templates..."
+                    value={templateSearchQuery}
+                    onChange={(e) => setTemplateSearchQuery(e.target.value)}
+                    className="max-w-sm"
+                  />
+                </div>
+              </DialogHeader>
+              {loadingTemplates ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              ) : (
+                <div className="relative overflow-hidden">
+                  <div className="max-h-[50vh] overflow-auto">
+                    <Table>
+                      <TableHeader className="sticky top-0 bg-white z-10">
+                        <TableRow>
+                          <TableHead className="w-[200px]">
+                            Template Name
+                          </TableHead>
+                          <TableHead className="w-[200px]">Ideal For</TableHead>
+                          <TableHead>Description</TableHead>
+                          <TableHead className="w-[100px] text-right">
+                            Actions
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredTemplates.map((template) => (
+                          <TableRow key={template.id}>
+                            <TableCell className="font-medium">
+                              {template.template_name}
+                            </TableCell>
+                            <TableCell>
+                              {JSON.parse(template.ideal_for).join(", ")}
+                            </TableCell>
+                            <TableCell className="max-w-[400px] truncate">
+                              {template.description}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleTemplateClick(template)}
+                              >
+                                Select
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        {filteredTemplates.length === 0 && (
+                          <TableRow>
+                            <TableCell
+                              colSpan={4}
+                              className="text-center text-muted-foreground"
+                            >
+                              No templates found matching your search.
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        {/* Documents Table */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Documents</CardTitle>
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-wrap gap-2 mt-2">
+                {STATUS_FILTERS.map((filter) => (
+                  <Button
+                    key={filter.value}
+                    variant="outline"
+                    size="sm"
+                    className={`${
+                      selectedStatus === filter.value
+                        ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                        : "hover:bg-muted"
+                    }`}
+                    onClick={() => setSelectedStatus(filter.value)}
+                  >
+                    {filter.value !== "all" && (
+                      <span
+                        className={`mr-2 h-2 w-2 rounded-full ${
+                          filter.value === "draft"
+                            ? "bg-yellow-500"
+                            : filter.value === "pending_signature"
+                              ? "bg-blue-500"
+                              : filter.value === "completed"
+                                ? "bg-green-500"
+                                : "bg-gray-500"
+                        }`}
+                      />
+                    )}
+                    {filter.label}
+                  </Button>
+                ))}
+              </div>
+              <div>
                 <Input
                   type="text"
-                  placeholder="Search templates..."
-                  value={templateSearchQuery}
-                  onChange={(e) => setTemplateSearchQuery(e.target.value)}
+                  placeholder="Search documents..."
+                  value={documentSearchQuery}
+                  onChange={(e) => setDocumentSearchQuery(e.target.value)}
                   className="max-w-sm"
                 />
               </div>
-            </DialogHeader>
-            {loadingTemplates ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </div>
-            ) : (
-              <div className="overflow-y-auto max-h-[60vh]">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[200px]">Template Name</TableHead>
-                      <TableHead className="w-[150px]">Ideal For</TableHead>
-                      <TableHead>Description</TableHead>
-                      <TableHead className="w-[100px]"></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredTemplates.map((template) => (
-                      <TableRow key={template.id}>
-                        <TableCell className="font-medium">
-                          {template.template_name}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-1">
-                            {JSON.parse(template.ideal_for).map(
-                              (tag, index) => (
-                                <span
-                                  key={index}
-                                  className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
-                                >
-                                  {tag}
-                                </span>
-                              )
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="max-h-[100px] overflow-y-auto pr-4">
-                            {template.description}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            size="sm"
-                            onClick={async () => {
-                              try {
-                                const {
-                                  data: { user },
-                                } = await supabase.auth.getUser();
-                                if (!user) throw new Error("Not authenticated");
-
-                                // Create new user document from template
-                                const { data: newDocument, error } =
-                                  await supabase
-                                    .from("user_documents")
-                                    .insert([
-                                      {
-                                        user_id: user.id,
-                                        template_id: template.id,
-                                        content: template.content,
-                                        title: template.template_name,
-                                        status: "draft",
-                                        placeholder_values:
-                                          template.placeholder_values,
-                                      },
-                                    ])
-                                    .select()
-                                    .single();
-
-                                if (error) throw error;
-
-                                router.push(
-                                  `/editor/document/${newDocument.id}`
-                                );
-                              } catch (error) {
-                                console.error(
-                                  "Error creating document:",
-                                  error
-                                );
-                              }
-                            }}
-                          >
-                            Select
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {/* Documents Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Documents</CardTitle>
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-wrap gap-2 mt-2">
-              {STATUS_FILTERS.map((filter) => (
-                <Button
-                  key={filter.value}
-                  variant="outline"
-                  size="sm"
-                  className={`${
-                    selectedStatus === filter.value
-                      ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                      : "hover:bg-muted"
-                  }`}
-                  onClick={() => setSelectedStatus(filter.value)}
-                >
-                  {filter.value !== "all" && (
-                    <span
-                      className={`mr-2 h-2 w-2 rounded-full ${
-                        filter.value === "draft"
-                          ? "bg-yellow-500"
-                          : filter.value === "pending_signature"
-                            ? "bg-blue-500"
-                            : filter.value === "completed"
-                              ? "bg-green-500"
-                              : "bg-gray-500"
-                      }`}
-                    />
-                  )}
-                  {filter.label}
-                </Button>
-              ))}
             </div>
-            <div>
-              <Input
-                type="text"
-                placeholder="Search documents..."
-                value={documentSearchQuery}
-                onChange={(e) => setDocumentSearchQuery(e.target.value)}
-                className="max-w-sm"
-              />
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Title</TableHead>
-                <TableHead>Template</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead>Last Updated</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredDocuments.map((doc) => (
-                <TableRow key={doc.id}>
-                  <TableCell className="font-medium">{doc.title}</TableCell>
-                  <TableCell>
-                    {doc.template?.template_name || "Custom Document"}
-                  </TableCell>
-                  <TableCell>
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        doc.status === "draft"
-                          ? "bg-yellow-100 text-yellow-800 border border-yellow-200"
-                          : doc.status === "completed" ||
-                              doc.status === "signed"
-                            ? "bg-green-100 text-green-800 border border-green-200"
-                            : doc.status === "pending_signature"
-                              ? "bg-blue-100 text-blue-800 border border-blue-200"
-                              : "bg-gray-100 text-gray-800 border border-gray-200"
-                      }`}
-                    >
-                      {doc.status === "pending_signature"
-                        ? "Pending Signature"
-                        : doc.status === "draft"
-                          ? "Draft"
-                          : doc.status === "completed" ||
-                              doc.status === "signed"
-                            ? "Completed"
-                            : doc.status}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-col">
-                      <span className="text-xs text-muted-foreground">
-                        {formatRelativeTime(doc.created_at)}
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-col">
-                      <span className="text-xs text-muted-foreground">
-                        {formatRelativeTime(doc.updated_at || doc.created_at)}
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => router.push(`/editor/document/${doc.id}`)}
-                    >
-                      {doc.status === "draft" ? "Edit" : "View"}
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {filteredDocuments.length === 0 && (
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell
-                    colSpan={6}
-                    className="text-center text-muted-foreground"
-                  >
-                    No documents found matching your search.
-                  </TableCell>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Template</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Created</TableHead>
+                  <TableHead>Last Updated</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+              </TableHeader>
+              <TableBody>
+                {filteredDocuments.map((doc) => (
+                  <TableRow key={doc.id}>
+                    <TableCell className="font-medium">{doc.title}</TableCell>
+                    <TableCell>
+                      {doc.template?.template_name || "Custom Document"}
+                    </TableCell>
+                    <TableCell>
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          doc.status === "draft"
+                            ? "bg-yellow-100 text-yellow-800 border border-yellow-200"
+                            : doc.status === "completed" ||
+                                doc.status === "signed"
+                              ? "bg-green-100 text-green-800 border border-green-200"
+                              : doc.status === "pending_signature"
+                                ? "bg-blue-100 text-blue-800 border border-blue-200"
+                                : "bg-gray-100 text-gray-800 border border-gray-200"
+                        }`}
+                      >
+                        {doc.status === "pending_signature"
+                          ? "Pending Signature"
+                          : doc.status === "draft"
+                            ? "Draft"
+                            : doc.status === "completed" ||
+                                doc.status === "signed"
+                              ? "Completed"
+                              : doc.status}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="text-xs text-muted-foreground">
+                          {formatRelativeTime(doc.created_at)}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="text-xs text-muted-foreground">
+                          {formatRelativeTime(doc.updated_at || doc.created_at)}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          router.push(`/editor/document/${doc.id}`)
+                        }
+                      >
+                        {doc.status === "draft" ? "Edit" : "View"}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {filteredDocuments.length === 0 && (
+                  <TableRow>
+                    <TableCell
+                      colSpan={6}
+                      className="text-center text-muted-foreground"
+                    >
+                      No documents found matching your search.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
 
-      <PartiesDialog
-        open={showPartiesDialog}
-        onOpenChange={setShowPartiesDialog}
-        parties={filteredParties}
-        searchQuery={partySearchQuery}
-        onSearchChange={setPartySearchQuery}
-        formatRelativeTime={formatRelativeTime}
-        router={router}
-      />
+        <PartiesDialog
+          open={showPartiesDialog}
+          onOpenChange={setShowPartiesDialog}
+          parties={filteredParties}
+          searchQuery={partySearchQuery}
+          onSearchChange={setPartySearchQuery}
+          formatRelativeTime={formatRelativeTime}
+          router={router}
+        />
 
-      <SignedDocumentsDialog
-        open={showSignedDocsDialog}
-        onOpenChange={setShowSignedDocsDialog}
-        documents={filteredSignedDocuments}
-        searchQuery={signedDocsSearchQuery}
-        onSearchChange={setSignedDocsSearchQuery}
-        formatRelativeTime={formatRelativeTime}
-      />
-    </div>
+        <SignedDocumentsDialog
+          open={showSignedDocsDialog}
+          onOpenChange={setShowSignedDocsDialog}
+          documents={filteredSignedDocuments}
+          searchQuery={signedDocsSearchQuery}
+          onSearchChange={setSignedDocsSearchQuery}
+          formatRelativeTime={formatRelativeTime}
+        />
+
+        {limitData && !limitData.isPaid && (
+          <div className="text-sm text-muted-foreground mb-2">
+            You have used {limitData.currentCount} out of {limitData.limit}
+            documents this month
+          </div>
+        )}
+
+        <UpgradeModal
+          open={showUpgrade}
+          onOpenChange={setShowUpgrade}
+          currentCount={limitData?.currentCount || 0}
+          limit={limitData?.limit || 3}
+          cycleEnd={limitData?.cycleEnd}
+          isLoading={loading}
+        />
+      </div>
+    </>
   );
 }

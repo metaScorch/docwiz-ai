@@ -8,6 +8,10 @@ import { Select } from "@/components/ui/select";
 import { JurisdictionSearch } from "@/components/JurisdictionSearch";
 import { Slider } from "@/components/ui/slider";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { UpgradeModal } from "@/components/UpgradeModal";
+import { checkDocumentLimit } from "@/utils/usageLimits";
+import { toast } from "sonner"; // Add Sonner import
+import { Toaster } from "sonner"; // Add Toaster import
 
 export function NewAgreementForm() {
   const router = useRouter();
@@ -22,6 +26,8 @@ export function NewAgreementForm() {
   const [generationStep, setGenerationStep] = useState(0);
   const [legalityError, setLegalityError] = useState(null);
   const [rateLimitError, setRateLimitError] = useState(null);
+  const [showUpgrade, setShowUpgrade] = useState(false);
+  const [limitData, setLimitData] = useState(null);
 
   const generationSteps = [
     "Understanding the requirement",
@@ -33,7 +39,33 @@ export function NewAgreementForm() {
   ];
 
   useEffect(() => {
-    const fetchUserRegistration = async () => {
+    // Fetch user registration and limit data in parallel
+    const initializeForm = async () => {
+      const [registrationResult, limitResult] = await Promise.allSettled([
+        fetchUserRegistration(),
+        checkUserLimits()
+      ]);
+
+      // Handle registration result
+      if (registrationResult.status === 'fulfilled' && registrationResult.value) {
+        setUserRegistration(registrationResult.value);
+        setJurisdiction(
+          `${registrationResult.value.city_name}, ${registrationResult.value.state_name}, ${registrationResult.value.country_name}`
+        );
+      }
+
+      // Handle limit result
+      if (limitResult.status === 'fulfilled' && limitResult.value) {
+        setLimitData(limitResult.value);
+      }
+    };
+
+    initializeForm();
+  }, []);
+
+  // Separate functions for cleaner code
+  const fetchUserRegistration = async () => {
+    try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const { data, error } = await supabase
@@ -42,33 +74,52 @@ export function NewAgreementForm() {
           .eq('user_id', user.id)
           .single();
         
-        if (data) {
-          setUserRegistration(data);
-          // Set default jurisdiction from registration
-          setJurisdiction(`${data.city_name}, ${data.state_name}, ${data.country_name}`);
-        }
+        if (error) throw error;
+        return data;
       }
-    };
+    } catch (error) {
+      console.error('Error fetching user registration:', error);
+      return null;
+    }
+  };
 
-    fetchUserRegistration();
-  }, [supabase]);
+  const checkUserLimits = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        return await checkDocumentLimit(user.id);
+      }
+    } catch (error) {
+      console.error('Error checking document limit:', error);
+      return null;
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Reset errors at the start
-    setRateLimitError(null);
-    setLegalityError(null);
     
     if (!jurisdiction) {
       setJurisdictionError(true);
       return;
     }
-    setJurisdictionError(false);
-    setLoading(true);
-    setGenerationStep(0);
 
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      // Check limits only at submission time
+      const limitInfo = await checkDocumentLimit(user.id);
+      setLimitData(limitInfo);
+      
+      if (!limitInfo.allowed) {
+        setShowUpgrade(true);
+        return;
+      }
+
+      setJurisdictionError(false);
+      setLoading(true);
+      setGenerationStep(0);
+
       // Start the loading states animation immediately
       const loadingStatesPromise = (async () => {
         for (let i = 0; i < generationSteps.length - 1; i++) {
@@ -79,14 +130,9 @@ export function NewAgreementForm() {
       })();
 
       // Make the API call in parallel
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
       const response = await fetch('/api/generate-agreement', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt,
           userId: user.id,
@@ -98,40 +144,32 @@ export function NewAgreementForm() {
 
       const data = await response.json();
       
-      // Handle rate limit response FIRST
       if (response.status === 429) {
         setRateLimitError({
           message: "Error generating agreement",
           details: "Rate limit exceeded",
           resetIn: data.resetIn
         });
-        setLoading(false);
         return;
       }
       
-      // Then handle other responses
       if (response.status === 422) {
         setLegalityError({
           message: "This agreement cannot be generated",
           details: data.legalityNotes
         });
-        setLoading(false);
         return;
       }
 
       if (!response.ok) throw new Error(data.error);
 
-      // Wait for both the loading states and API call to complete
       await loadingStatesPromise;
-
-      // Only redirect if everything is successful
       router.push(`/editor/document/${data.id}`);
 
     } catch (error) {
       console.error('Error:', error);
-      setLegalityError({
-        message: "Error generating agreement",
-        details: error.message
+      toast.error("Failed to generate agreement", {
+        description: error.message
       });
     } finally {
       setLoading(false);
@@ -194,106 +232,123 @@ export function NewAgreementForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {legalityError && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>{legalityError.message}</AlertTitle>
-          <AlertDescription>
-            {legalityError.details}
-          </AlertDescription>
-        </Alert>
-      )}
-      {rateLimitError && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error generating agreement</AlertTitle>
-          <AlertDescription className="space-y-2">
-            <p>Ouch, You've hit usage limits, Contact support for higher limits</p>
-           
-            <b>
-              Please try again in {formatTimeRemaining(rateLimitError.resetIn)}
-            </b>
-          </AlertDescription>
-        </Alert>
-      )}
-      <div className="space-y-2">
-        <div className="flex items-center gap-2 mb-2">
-          <Wand2 className="h-4 w-4" />
-          <span className="text-sm text-muted-foreground">AI-Powered Generation</span>
-        </div>
-        <Textarea
-          placeholder="Explain what agreement you need and for what purpose...
+    <>
+      <Toaster />
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {legalityError && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>{legalityError.message}</AlertTitle>
+            <AlertDescription>
+              {legalityError.details}
+            </AlertDescription>
+          </Alert>
+        )}
+        {rateLimitError && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error generating agreement</AlertTitle>
+            <AlertDescription className="space-y-2">
+              <p>Ouch, You've hit usage limits, Contact support for higher limits</p>
+             
+              <b>
+                Please try again in {formatTimeRemaining(rateLimitError.resetIn)}
+              </b>
+            </AlertDescription>
+          </Alert>
+        )}
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 mb-2">
+            <Wand2 className="h-4 w-4" />
+            <span className="text-sm text-muted-foreground">AI-Powered Generation</span>
+          </div>
+          <Textarea
+            placeholder="Explain what agreement you need and for what purpose...
 Example: I need a non-disclosure agreement for a freelance developer who will be working on my startup"
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          className="min-h-[120px]"
-        />
-        <p className="text-sm text-muted-foreground">
-          Tip: Check our templates first to save time - we have many common agreements ready to use.
-        </p>
-      </div>
-      <div className="space-y-2">
-        <label className="text-sm text-muted-foreground">
-          Jurisdiction <span className="text-red-500">*</span>
-        </label>
-        <JurisdictionSearch
-          value={jurisdiction}
-          onChange={setJurisdiction}
-          defaultValue={userRegistration ? 
-            `${userRegistration.city_name}, ${userRegistration.state_name}, ${userRegistration.country_name}` : 
-            "Select jurisdiction"
-          }
-        />
-        {jurisdictionError && (
-          <p className="text-sm text-red-500">
-            Please select a jurisdiction
-          </p>
-        )}
-        {userRegistration && (
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            className="min-h-[120px]"
+          />
           <p className="text-sm text-muted-foreground">
-            Default jurisdiction based on your registration
+            Tip: Check our templates first to save time - we have many common agreements ready to use.
           </p>
-        )}
-      </div>
-      <div className="space-y-4">
+        </div>
         <div className="space-y-2">
-          <label className="text-sm text-muted-foreground">Wording Complexity</label>
-          <Slider
-            min={1}
-            max={5}
-            step={1}
-            value={[complexity]}
-            onValueChange={([value]) => setComplexity(value)}
-            className="w-full"
-            style={{
-              "--slider-color": "#0700c7"
-            }}
+          <label className="text-sm text-muted-foreground">
+            Jurisdiction <span className="text-red-500">*</span>
+          </label>
+          <JurisdictionSearch
+            value={jurisdiction}
+            onChange={setJurisdiction}
+            defaultValue={userRegistration ? 
+              `${userRegistration.city_name}, ${userRegistration.state_name}, ${userRegistration.country_name}` : 
+              "Select jurisdiction"
+            }
           />
-          <p className="text-sm text-muted-foreground">{getComplexityLabel(complexity)}</p>
+          {jurisdictionError && (
+            <p className="text-sm text-red-500">
+              Please select a jurisdiction
+            </p>
+          )}
+          {userRegistration && (
+            <p className="text-sm text-muted-foreground">
+              Default jurisdiction based on your registration
+            </p>
+          )}
+        </div>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm text-muted-foreground">Wording Complexity</label>
+            <Slider
+              min={1}
+              max={5}
+              step={1}
+              value={[complexity]}
+              onValueChange={([value]) => setComplexity(value)}
+              className="w-full"
+              style={{
+                "--slider-color": "#0700c7"
+              }}
+            />
+            <p className="text-sm text-muted-foreground">{getComplexityLabel(complexity)}</p>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm text-muted-foreground">Agreement Length</label>
+            <Slider
+              min={1}
+              max={5}
+              step={1}
+              value={[length]}
+              onValueChange={([value]) => setLength(value)}
+              className="w-full"
+              style={{
+                "--slider-color": "#0700c7"
+              }}
+            />
+            <p className="text-sm text-muted-foreground">{getLengthLabel(length)}</p>
+          </div>
         </div>
 
-        <div className="space-y-2">
-          <label className="text-sm text-muted-foreground">Agreement Length</label>
-          <Slider
-            min={1}
-            max={5}
-            step={1}
-            value={[length]}
-            onValueChange={([value]) => setLength(value)}
-            className="w-full"
-            style={{
-              "--slider-color": "#0700c7"
-            }}
-          />
-          <p className="text-sm text-muted-foreground">{getLengthLabel(length)}</p>
-        </div>
-      </div>
-      <Button type="submit" className="w-full" disabled={loading}>
-        {loading ? "Generating..." : "Generate Agreement"}
-      </Button>
+        <Button 
+          type="submit" 
+          className="w-full" 
+          disabled={loading}
+        >
+          {loading ? "Generating..." : "Generate Agreement"}
+        </Button>
 
-      {loading && <LoadingStates />}
-    </form>
+        {loading && <LoadingStates />}
+      </form>
+
+      <UpgradeModal
+        open={showUpgrade}
+        onOpenChange={setShowUpgrade}
+        currentCount={limitData?.currentCount || 0}
+        limit={limitData?.limit || 3}
+        cycleEnd={limitData?.cycleEnd}
+        isLoading={false}
+      />
+    </>
   );
 }
