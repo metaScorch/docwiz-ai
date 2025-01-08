@@ -45,6 +45,7 @@ import { UpgradeModal } from "@/components/UpgradeModal";
 import { checkDocumentLimit } from "@/utils/usageLimits";
 import { toast } from "sonner";
 import { Toaster } from "sonner";
+import Link from "next/link";
 
 const STATUS_FILTERS = [
   { value: "all", label: "All" },
@@ -955,8 +956,11 @@ export default function DashboardPage() {
 
         {limitData && !limitData.isPaid && (
           <div className="text-sm text-muted-foreground mb-2">
-            You have used {limitData.currentCount} out of {limitData.limit}
-            documents this month
+            You have used {limitData.currentCount} out of {limitData.limit}{" "}
+            documents this month.{" "}
+            <Link href="/pricing" className="text-primary hover:underline">
+              Upgrade to get unlimited documents
+            </Link>
           </div>
         )}
 
