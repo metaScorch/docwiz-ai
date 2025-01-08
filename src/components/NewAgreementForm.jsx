@@ -111,14 +111,35 @@ export function NewAgreementForm() {
       setLoading(true);
       setGenerationStep(0);
 
-      // Check limits only at submission time
-      const limitInfo = await checkDocumentLimit(user.id);
-      setLimitData(limitInfo);
-      
-      if (!limitInfo.allowed) {
-        setLoading(false); // Reset loading state
-        setShowUpgrade(true);
-        return;
+      // First get user's registration
+      const { data: registration } = await supabase
+        .from("registrations")
+        .select("id")
+        .eq("user_id", user.id)
+        .single();
+
+      if (!registration) return;
+
+      // Check subscription status using registration_id
+      const { data: subscription } = await supabase
+        .from("subscriptions")
+        .select("status")
+        .eq("registration_id", registration.id)
+        .single();
+
+      // Set subscription status for limit checking
+      const hasActiveSubscription = subscription?.status === "active";
+
+      // Only check limits if no active subscription
+      if (!hasActiveSubscription) {
+        const limitInfo = await checkDocumentLimit(user.id);
+        setLimitData(limitInfo);
+        
+        if (!limitInfo.allowed) {
+          setLoading(false); // Reset loading state
+          setShowUpgrade(true);
+          return;
+        }
       }
 
       setJurisdictionError(false);

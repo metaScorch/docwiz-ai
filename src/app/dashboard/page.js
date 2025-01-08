@@ -274,6 +274,7 @@ export default function DashboardPage() {
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [templateSearchQuery, setTemplateSearchQuery] = useState("");
   const [userDocuments, setUserDocuments] = useState([]);
+  const [filteredDocuments, setFilteredDocuments] = useState([]);
   const [documentSearchQuery, setDocumentSearchQuery] = useState("");
   const [uniqueParties, setUniqueParties] = useState([]);
   const [showPartiesDialog, setShowPartiesDialog] = useState(false);
@@ -318,51 +319,104 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    let mounted = true;
-
-    const initializeDashboard = async () => {
+    async function fetchDocumentsAndSubscription() {
       try {
         const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user || !mounted) return;
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session) return;
 
-        // Load essential data first
-        const documentsData = await fetchDocuments(user.id);
-        setUserDocuments(documentsData);
+        // First get user's registration
+        const { data: registration } = await supabase
+          .from("registrations")
+          .select("id")
+          .eq("user_id", session.user.id)
+          .single();
 
-        // Process initial stats
-        const initialStats = processDocumentStats(documentsData);
-        setStats(initialStats);
-        setIsInitialized(true);
+        if (!registration) return;
 
-        // Load additional data in the background
-        Promise.all([fetchRegistrations(user.id), checkDocumentLimit(user.id)])
-          .then(([registrationsData, limitInfo]) => {
-            if (!mounted) return;
+        // Check subscription status - removed plan from select
+        const { data: subscription } = await supabase
+          .from("subscriptions")
+          .select("status")
+          .eq("registration_id", registration.id)
+          .single();
 
-            setRegistrations(registrationsData);
-            setLimitData(limitInfo);
+        // Set subscription status for limit checking - removed plan check
+        const hasActiveSubscription = subscription?.status === "active";
 
-            // Process parties data
-            const partiesData = processPartiesData(documentsData);
-            setUniqueParties(partiesData);
-          })
-          .catch(console.error);
-      } catch (error) {
-        console.error("Error initializing dashboard:", error);
-        if (mounted) {
-          setIsInitialized(true); // Still set initialized to show at least partial data
+        // Only fetch limit data if no active subscription
+        if (!hasActiveSubscription) {
+          const limitData = await checkDocumentLimit(session.user.id);
+          setLimitData(limitData);
+          if (!limitData.allowed) {
+            setShowUpgrade(true);
+          }
         }
+
+        // Fetch documents
+        const { data: documents } = await supabase
+          .from("user_documents")
+          .select("*, template:template_id(*)")
+          .eq("user_id", session.user.id)
+          .order("updated_at", { ascending: false });
+
+        if (documents) {
+          setUserDocuments(documents);
+          setFilteredDocuments(documents);
+
+          // Calculate and update stats
+          const totalDocs = documents.length;
+          const signedDocs = documents.filter(
+            (doc) => doc.status === "completed" || doc.status === "signed"
+          ).length;
+
+          // Count unique parties from documents
+          const uniqueParties = new Set();
+          documents.forEach((doc) => {
+            const signers = doc.document?.signers || [];
+            signers.forEach((signer) => {
+              uniqueParties.add(signer.email);
+            });
+          });
+
+          // Update stats
+          setStats({
+            totalDocuments: totalDocs,
+            signedDocuments: signedDocs,
+            totalParties: uniqueParties.size,
+          });
+        }
+
+        setIsInitialized(true);
+      } catch (error) {
+        console.error("Error fetching data:", error);
       }
-    };
+    }
 
-    initializeDashboard();
-
-    return () => {
-      mounted = false;
-    };
+    fetchDocumentsAndSubscription();
   }, [supabase]);
+
+  // Add useEffect to handle document filtering
+  useEffect(() => {
+    const filtered = userDocuments.filter((doc) => {
+      const matchesSearch = Object.values({
+        title: doc.title || "",
+        description: doc.description || "",
+      }).some((value) =>
+        value.toLowerCase().includes(documentSearchQuery.toLowerCase())
+      );
+
+      const matchesStatus =
+        selectedStatus === "all" ||
+        doc.status === selectedStatus ||
+        (selectedStatus === "completed" && doc.status === "signed");
+
+      return matchesSearch && matchesStatus;
+    });
+
+    setFilteredDocuments(filtered);
+  }, [userDocuments, documentSearchQuery, selectedStatus]);
 
   // Helper function to process document stats
   const processDocumentStats = (documents) => {
@@ -473,22 +527,6 @@ export default function DashboardPage() {
     }
   }
 
-  const filteredDocuments = userDocuments.filter((doc) => {
-    const matchesSearch = Object.values({
-      title: doc.title || "",
-      description: doc.description || "",
-    }).some((value) =>
-      value.toLowerCase().includes(documentSearchQuery.toLowerCase())
-    );
-
-    const matchesStatus =
-      selectedStatus === "all" ||
-      doc.status === selectedStatus ||
-      (selectedStatus === "completed" && doc.status === "signed");
-
-    return matchesSearch && matchesStatus;
-  });
-
   const filteredParties = uniqueParties.filter((party) => {
     const searchTerm = partySearchQuery.toLowerCase();
     if (
@@ -524,14 +562,34 @@ export default function DashboardPage() {
       } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      // Check limit before creating document
-      const limitInfo = await checkDocumentLimit(user.id);
-      setLimitData(limitInfo);
+      // First get user's registration
+      const { data: registration } = await supabase
+        .from("registrations")
+        .select("id")
+        .eq("user_id", user.id)
+        .single();
 
-      if (!limitInfo.allowed) {
-        setShowTemplateDialog(false);
-        setShowUpgrade(true);
-        return;
+      if (!registration) return;
+
+      // Check subscription status using registration_id
+      const { data: subscription } = await supabase
+        .from("subscriptions")
+        .select("status")
+        .eq("registration_id", registration.id)
+        .single();
+
+      // Set subscription status for limit checking
+      const hasActiveSubscription = subscription?.status === "active";
+
+      // Only check limits if no active subscription
+      if (!hasActiveSubscription) {
+        const limitData = await checkDocumentLimit(user.id);
+        setLimitData(limitData);
+        if (!limitData.allowed) {
+          setShowTemplateDialog(false);
+          setShowUpgrade(true);
+          return;
+        }
       }
 
       const { data: newDocument, error } = await supabase
@@ -597,18 +655,39 @@ export default function DashboardPage() {
               <DropdownMenuItem
                 onClick={async () => {
                   try {
-                    // Check subscription status directly from database
-                    const { data: subscription } = await supabase
-                      .from("subscriptions")
-                      .select("status, stripe_subscription_id")
-                      .eq("registration_id", registrations[0]?.id) // Assuming the first registration
-                      .single();
+                    // First get user's registration
+                    const { data: registration, error: regError } =
+                      await supabase
+                        .from("registrations")
+                        .select("id, stripe_customer_id")
+                        .eq("user_id", session.user.id)
+                        .single();
 
+                    if (regError) {
+                      console.error("Registration error:", regError);
+                      router.push("/pricing");
+                      return;
+                    }
+
+                    // Then check subscription status using registration_id
+                    const { data: subscription, error: subError } =
+                      await supabase
+                        .from("subscriptions")
+                        .select("status, stripe_subscription_id")
+                        .eq("registration_id", registration.id)
+                        .single();
+
+                    // If no subscription or error, redirect to pricing
+                    if (subError || !subscription) {
+                      router.push("/pricing");
+                      return;
+                    }
+
+                    // If subscribed with Stripe subscription, open customer portal
                     if (
-                      subscription?.status === "active" &&
-                      subscription?.stripe_subscription_id
+                      subscription.status === "active" &&
+                      subscription.stripe_subscription_id
                     ) {
-                      // If subscribed, open customer portal
                       const response = await fetch(
                         "/api/create-billing-portal",
                         {
@@ -619,7 +698,7 @@ export default function DashboardPage() {
                       if (error) throw new Error(error);
                       window.location.href = session_url;
                     } else {
-                      // If not subscribed, open pricing page
+                      // If not subscribed or no Stripe subscription, open pricing page
                       router.push("/pricing");
                     }
                   } catch (error) {

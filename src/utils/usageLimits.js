@@ -4,15 +4,26 @@ export async function checkDocumentLimit(userId) {
   const supabase = createClientComponentClient();
 
   try {
-    // First check if user has a paid subscription
-    const { data: subscription } = await supabase
-      .from("subscriptions")
-      .select("status, plan")
+    // First get user's registration
+    const { data: registration } = await supabase
+      .from("registrations")
+      .select("id")
       .eq("user_id", userId)
       .single();
 
-    // If user has active paid subscription, no limits
-    if (subscription?.status === "active" && subscription?.plan !== "free") {
+    if (!registration) {
+      throw new Error("No registration found");
+    }
+
+    // Check subscription status using registration_id
+    const { data: subscription } = await supabase
+      .from("subscriptions")
+      .select("status")
+      .eq("registration_id", registration.id)
+      .single();
+
+    // If user has active subscription, no limits
+    if (subscription?.status === "active") {
       return {
         allowed: true,
         currentCount: 0,
@@ -48,31 +59,25 @@ export async function checkDocumentLimit(userId) {
     const cycleEnd = new Date(cycleStart);
     cycleEnd.setMonth(cycleEnd.getMonth() + 1);
 
-    // Get document count for current billing cycle
-    const { count, error } = await supabase
+    // Count documents created in current cycle
+    const { count } = await supabase
       .from("user_documents")
-      .select("*", { count: "exact" })
+      .select("id", { count: "exact" })
       .eq("user_id", userId)
       .gte("created_at", cycleStart.toISOString())
       .lt("created_at", cycleEnd.toISOString());
 
-    if (error) {
-      console.error("Error getting document count:", error);
-      throw error;
-    }
-
-    const FREE_PLAN_LIMIT = 12;
-    const currentCount = count || 0;
+    const FREE_TIER_LIMIT = 3;
 
     return {
-      allowed: currentCount < FREE_PLAN_LIMIT,
-      currentCount,
-      limit: FREE_PLAN_LIMIT,
-      cycleEnd,
+      allowed: count < FREE_TIER_LIMIT,
+      currentCount: count,
+      limit: FREE_TIER_LIMIT,
+      cycleEnd: cycleEnd.toISOString(),
       isPaid: false,
     };
   } catch (error) {
     console.error("Error checking document limit:", error);
-    throw new Error("Failed to check document limit: " + error.message);
+    throw error;
   }
 }

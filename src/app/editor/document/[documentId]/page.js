@@ -41,35 +41,54 @@ export default function EditorPage({ params }) {
           data: { session },
         } = await supabase.auth.getSession();
 
-        if (!session?.user) return;
+        if (!session?.user) {
+          console.log("No session found");
+          return;
+        }
 
         // First get user's registration
-        const { data: registration } = await supabase
+        const { data: registration, error: regError } = await supabase
           .from("registrations")
           .select("id")
           .eq("user_id", session.user.id)
           .single();
 
-        if (!registration) return;
+        if (regError) {
+          console.error("Registration error:", regError);
+          return;
+        }
+
+        if (!registration) {
+          console.log("No registration found");
+          return;
+        }
 
         // Then check subscription status using registration_id
-        const { data: subscription } = await supabase
+        const { data: subscription, error: subError } = await supabase
           .from("subscriptions")
-          .select("status, plan")
+          .select("status")
           .eq("registration_id", registration.id)
           .single();
 
-        // Set subscription status
-        setHasActiveSubscription(
-          subscription?.status === "active" && subscription?.plan !== "free"
-        );
+        // If no subscription found or error, user is on free plan
+        if (subError || !subscription) {
+          setHasActiveSubscription(false);
+        } else {
+          // User has active subscription
+          setHasActiveSubscription(subscription.status === "active");
+        }
 
         // Fetch document data
-        const { data: document } = await supabase
+        const { data: document, error: docError } = await supabase
           .from("user_documents")
           .select("*")
           .eq("id", documentId)
           .single();
+
+        if (docError) {
+          console.error("Document error:", docError);
+          return;
+        }
 
         if (document) {
           setUserDocument(document);
@@ -83,7 +102,7 @@ export default function EditorPage({ params }) {
           }
         }
       } catch (error) {
-        console.error("Error fetching data:", error);
+        console.error("Error in fetchDocumentAndSubscription:", error);
       }
     }
 
