@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
 import Editor from "@/components/Editor";
 import { formatDistanceToNow } from "date-fns";
 import { use } from "react";
@@ -16,6 +16,7 @@ export default function EditorPage({ params }) {
   const documentId = resolvedParams.documentId;
   const router = useRouter();
   const supabase = createClientComponentClient();
+  const [hasActiveSubscription, setHasActiveSubscription] = useState(false);
   const [userDocument, setUserDocument] = useState(null);
   const [content, setContent] = useState("");
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -33,56 +34,61 @@ export default function EditorPage({ params }) {
   };
 
   useEffect(() => {
-    async function fetchDocument() {
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
+    async function fetchDocumentAndSubscription() {
+      try {
+        // Get current session
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
 
-      if (userError) {
-        console.error("Error getting user:", userError);
-        return;
-      }
+        if (!session?.user) return;
 
-      // Fetch the user's document
-      const { data: document, error: documentError } = await supabase
-        .from("user_documents")
-        .select(
-          `
-          *,
-          template:templates(*)
-        `
-        )
-        .eq("id", documentId)
-        .eq("user_id", user.id)
-        .single();
+        // First get user's registration
+        const { data: registration } = await supabase
+          .from("registrations")
+          .select("id")
+          .eq("user_id", session.user.id)
+          .single();
 
-      if (documentError) {
-        console.error("Error fetching document:", documentError);
-        return;
-      }
+        if (!registration) return;
 
-      // Redirect to tracking page if document is pending signature or completed
-      if (
-        document.status === "pending_signature" ||
-        document.status === "completed"
-      ) {
-        router.push(`/editor/document/${documentId}/tracking`);
-        return;
-      }
+        // Then check subscription status using registration_id
+        const { data: subscription } = await supabase
+          .from("subscriptions")
+          .select("status, plan")
+          .eq("registration_id", registration.id)
+          .single();
 
-      if (document) {
-        setUserDocument(document);
-        setContent(document.content);
-        setFeatureCounts({
-          amendments: document.amendments_count || 0,
-          autoformat: document.autoformat_count || 0,
-        });
+        // Set subscription status
+        setHasActiveSubscription(
+          subscription?.status === "active" && subscription?.plan !== "free"
+        );
+
+        // Fetch document data
+        const { data: document } = await supabase
+          .from("user_documents")
+          .select("*")
+          .eq("id", documentId)
+          .single();
+
+        if (document) {
+          setUserDocument(document);
+          setContent(document.content);
+          // Only set feature counts if no active subscription
+          if (!hasActiveSubscription) {
+            setFeatureCounts({
+              amendments: document.amendments_count || 0,
+              autoformat: document.autoformat_count || 0,
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching data:", error);
       }
     }
 
-    fetchDocument();
-  }, [documentId, supabase, router]);
+    fetchDocumentAndSubscription();
+  }, [documentId, supabase, hasActiveSubscription]);
 
   useEffect(() => {
     const intervalId = setInterval(() => {
@@ -138,6 +144,9 @@ export default function EditorPage({ params }) {
   };
 
   const updateFeatureCount = async (feature) => {
+    // Skip count update if user has active subscription
+    if (hasActiveSubscription) return;
+
     const countField =
       feature === "amendments" ? "amendments_count" : "autoformat_count";
     const newCount = featureCounts[feature] + 1;
@@ -156,12 +165,14 @@ export default function EditorPage({ params }) {
   };
 
   const handleImproveFormatting = async (currentContent) => {
-    const AUTOFORMAT_LIMIT = 3;
-
-    if (featureCounts.autoformat >= AUTOFORMAT_LIMIT) {
-      setCurrentFeature("autoformat");
-      setShowUpgradeModal(true);
-      return null;
+    // Skip limit check if user has active subscription
+    if (!hasActiveSubscription) {
+      const AUTOFORMAT_LIMIT = 3;
+      if (featureCounts.autoformat >= AUTOFORMAT_LIMIT) {
+        setCurrentFeature("autoformat");
+        setShowUpgradeModal(true);
+        return null;
+      }
     }
 
     setIsFormatting(true);
@@ -175,7 +186,8 @@ export default function EditorPage({ params }) {
       const data = await response.json();
       if (data.error) throw new Error(data.error);
 
-      if (data.formattedContent) {
+      // Only update count if not subscribed and formatting was successful
+      if (!hasActiveSubscription && data.formattedContent) {
         await updateFeatureCount("autoformat");
       }
 

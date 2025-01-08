@@ -71,6 +71,7 @@ export default function Editor({
   onUpdateFeatureCount,
   setCurrentFeature,
   setShowUpgradeModal,
+  hasActiveSubscription,
 }) {
   const [isMounted, setIsMounted] = useState(false);
   const [documentValues, setDocumentValues] = useState({});
@@ -321,14 +322,16 @@ export default function Editor({
   const handleSuggestionSubmit = async (prompt, shouldFormat = false) => {
     if (!selection) return;
 
-    const AMENDMENTS_LIMIT = 3;
-
-    if (featureCounts.amendments >= AMENDMENTS_LIMIT) {
-      setCurrentFeature("amendments");
-      setShowUpgradeModal(true);
-      setPopupPosition(null);
-      setSelection(null);
-      return;
+    // Skip limit check if user has active subscription
+    if (!hasActiveSubscription) {
+      const AMENDMENTS_LIMIT = 3;
+      if (featureCounts.amendments >= AMENDMENTS_LIMIT) {
+        setCurrentFeature("amendments");
+        setShowUpgradeModal(true);
+        setPopupPosition(null);
+        setSelection(null);
+        return;
+      }
     }
 
     setIsProcessing(true);
@@ -382,7 +385,8 @@ export default function Editor({
         });
       }
 
-      if (data.improvedText) {
+      // Only update count if not subscribed and improvement was successful
+      if (!hasActiveSubscription && data.improvedText) {
         await onUpdateFeatureCount("amendments");
       }
 

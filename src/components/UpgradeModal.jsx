@@ -78,7 +78,7 @@ export function UpgradeModal({
               ))}
             </ul>
             <p className="text-sm text-muted-foreground mt-2">
-              Starting at <span className="font-semibold">$19.99/month</span>
+              Starting at <span className="font-semibold">$12.5/month </span><i>(billed annually)</i>
             </p>
           </div>
         </div>
