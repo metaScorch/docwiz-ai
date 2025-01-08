@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -13,6 +13,8 @@ import SignupStep from "../components/SignupStep";
 import OrganizationTypeStep from "../components/OrganizationTypeStep";
 import BusinessDetailsStep from "../components/BusinessDetailsStep";
 import EntityDetailsStep from "../components/EntityDetailsStep";
+import useSignupStore from "@/stores/signupStore";
+import { useRouter } from "next/navigation";
 
 const steps = [
   "Signup",
@@ -22,15 +24,31 @@ const steps = [
 ];
 
 export default function OnboardingForm() {
-  const [currentStep, setCurrentStep] = useState(0);
-  const [formData, setFormData] = useState({});
-  const [error, setError] = useState(null);
+  const router = useRouter();
+  const {
+    currentStep,
+    formData,
+    error,
+    setCurrentStep,
+    setFormData,
+    setError,
+    reset,
+  } = useSignupStore();
+
+  // Clear store when component unmounts after successful completion
+  useEffect(() => {
+    return () => {
+      if (currentStep === steps.length) {
+        reset();
+      }
+    };
+  }, [currentStep, reset]);
 
   const handleNext = (stepData) => {
     if (!stepData.error) {
       setError(null);
-      setFormData({ ...formData, ...stepData });
-      setCurrentStep((prev) => Math.min(prev + 1, steps.length - 1));
+      setFormData(stepData);
+      setCurrentStep(Math.min(currentStep + 1, steps.length - 1));
     }
   };
 
@@ -42,11 +60,13 @@ export default function OnboardingForm() {
   console.log("Rendered with formData:", formData); // Debug log
 
   const handleBack = () => {
-    setCurrentStep((prev) => Math.max(prev - 1, 0));
+    setCurrentStep(Math.max(currentStep - 1, 0));
   };
 
   const handleSubmit = () => {
     console.log("Form submitted:", formData);
+    reset(); // Clear the store after successful submission
+    router.push("/dashboard");
   };
 
   const renderStep = () => {

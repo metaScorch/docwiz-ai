@@ -5,6 +5,9 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import Image from "next/image";
+import { extractBusinessDomain } from "@/utils/emailUtils";
+import { FcGoogle } from "react-icons/fc";
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 
 export default function SignupStep({ onNext, onError }) {
   const [loading, setLoading] = useState(false);
@@ -12,28 +15,29 @@ export default function SignupStep({ onNext, onError }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
+  const supabase = createClientComponentClient();
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
       setLoading(true);
 
-      // First check if the email exists
-      const {
-        data: { users },
-        error: signInError,
-      } = await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          shouldCreateUser: false, // This prevents creating a new user
+      // Check if user exists using the check-email API endpoint
+      const emailCheckResponse = await fetch("/api/check-email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
+        body: JSON.stringify({ email }),
       });
 
-      // If no error, it means the email exists
-      if (!signInError) {
-        onError(
-          "This email is already registered. We've sent you a magic link to sign in. Check your email inbox."
-        );
-        return;
+      if (!emailCheckResponse.ok) {
+        const data = await emailCheckResponse.json();
+        if (emailCheckResponse.status === 400) {
+          onError("This email is already registered. Please sign in instead.");
+          return;
+        }
+        throw new Error(data.error || "Failed to check email");
       }
 
       // Proceed with signup if email doesn't exist
@@ -54,6 +58,7 @@ export default function SignupStep({ onNext, onError }) {
           {
             user_id: authData.user.id,
             status: "pending",
+            domain: extractBusinessDomain(email),
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           },
@@ -76,6 +81,21 @@ export default function SignupStep({ onNext, onError }) {
       onError(error.message || "Error during signup");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGoogleSignUp = async () => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      if (error) throw error;
+    } catch (error) {
+      console.error("Error signing up with Google:", error);
+      toast.error("Failed to sign up with Google");
     }
   };
 
@@ -128,6 +148,23 @@ export default function SignupStep({ onNext, onError }) {
           {loading ? "Loading..." : "Sign Up with Email"}
         </Button>
       </form>
+      <div className="relative my-4">
+        <div className="absolute inset-0 flex items-center">
+          <span className="w-full border-t" />
+        </div>
+        <div className="relative flex justify-center text-xs uppercase">
+          <span className="bg-white px-2 text-gray-500">Or continue with</span>
+        </div>
+      </div>
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full"
+        onClick={handleGoogleSignUp}
+      >
+        <FcGoogle className="mr-2 h-5 w-5" />
+        Sign up with Google
+      </Button>
     </div>
   );
 }

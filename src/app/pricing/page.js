@@ -104,7 +104,7 @@ export default function PricingPage() {
 
   const handleSubscription = async (plan) => {
     if (plan.name === "ENTERPRISE") {
-      window.location.href = "mailto:hello@mydocwiz.com";
+      window.open("https://tally.so/r/wgYL9K", "_blank");
       return;
     }
 

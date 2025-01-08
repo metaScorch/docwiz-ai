@@ -63,7 +63,7 @@ export function UpgradeModal({
             </p>
           </div>
           <div className="bg-muted p-4 rounded-lg space-y-3">
-            <h4 className="font-medium text-lg">Upgrade to Unlimited for:</h4>
+            <h4 className="font-medium text-lg">Upgrade to Unlimited Plan for:</h4>
             <ul className="space-y-2">
               {[
                 "Unlimited Documents",

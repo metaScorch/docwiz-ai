@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { Mail, Lock, Loader2 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
+import { FcGoogle } from "react-icons/fc";
 
 export default function SignIn() {
   const router = useRouter();
@@ -113,6 +114,44 @@ export default function SignIn() {
     }
   };
 
+  const handleGoogleSignIn = async () => {
+    try {
+      setLoading(true);
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      if (error) throw error;
+    } catch (error) {
+      console.error("Error signing in with Google:", error);
+      toast.error("Failed to sign in with Google");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMagicLinkSignIn = async (e) => {
+    e.preventDefault();
+    try {
+      setLoading(true);
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      if (error) throw error;
+      toast.success("Magic link sent to your email!");
+    } catch (error) {
+      console.error("Error sending magic link:", error);
+      toast.error(error.message || "Failed to send magic link");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-r from-blue-100 to-purple-100 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
@@ -165,7 +204,46 @@ export default function SignIn() {
             </div>
 
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Signing in..." : "Sign In"}
+              {loading ? "Signing in..." : "Sign In with Password"}
+            </Button>
+
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full"
+              onClick={handleMagicLinkSignIn}
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Sending Magic Link...
+                </>
+              ) : (
+                "Sign In with Magic Link"
+              )}
+            </Button>
+
+            <div className="relative my-4">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-white px-2 text-gray-500">
+                  Or continue with
+                </span>
+              </div>
+            </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={handleGoogleSignIn}
+              disabled={loading}
+            >
+              <FcGoogle className="mr-2 h-5 w-5" />
+              Sign in with Google
             </Button>
 
             <div className="text-center text-sm text-gray-500">
