@@ -163,19 +163,43 @@ export default function EditorPage({ params }) {
   };
 
   const updateFeatureCount = async (feature) => {
-    // Skip count update if user has active subscription
-    if (hasActiveSubscription) return;
-
-    const countField =
-      feature === "amendments" ? "amendments_count" : "autoformat_count";
-    const newCount = featureCounts[feature] + 1;
-
-    const { error } = await supabase
+    // First get the current count from the database
+    const { data: currentDoc, error: fetchError } = await supabase
       .from("user_documents")
-      .update({ [countField]: newCount })
+      .select(
+        feature === "amendments" ? "amendments_count" : "autoformat_count"
+      )
+      .eq("id", documentId)
+      .single();
+
+    if (fetchError) {
+      console.error("Error fetching current count:", fetchError);
+      return;
+    }
+
+    // Get the current count from DB, defaulting to 0 if null
+    const currentCount =
+      currentDoc[
+        feature === "amendments" ? "amendments_count" : "autoformat_count"
+      ] || 0;
+    const newCount = currentCount + 1;
+
+    // Update the database with the new count
+    const { error: updateError } = await supabase
+      .from("user_documents")
+      .update({
+        [feature === "amendments" ? "amendments_count" : "autoformat_count"]:
+          newCount,
+      })
       .eq("id", documentId);
 
-    if (!error) {
+    if (updateError) {
+      console.error("Error updating count:", updateError);
+      return;
+    }
+
+    // Only update the UI counter for non-subscribed users
+    if (!hasActiveSubscription) {
       setFeatureCounts((prev) => ({
         ...prev,
         [feature]: newCount,
@@ -184,7 +208,7 @@ export default function EditorPage({ params }) {
   };
 
   const handleImproveFormatting = async (currentContent) => {
-    // Skip limit check if user has active subscription
+    // Only check limits for non-subscribed users
     if (!hasActiveSubscription) {
       const AUTOFORMAT_LIMIT = 3;
       if (featureCounts.autoformat >= AUTOFORMAT_LIMIT) {
@@ -205,8 +229,8 @@ export default function EditorPage({ params }) {
       const data = await response.json();
       if (data.error) throw new Error(data.error);
 
-      // Only update count if not subscribed and formatting was successful
-      if (!hasActiveSubscription && data.formattedContent) {
+      // Always update the count for analytics
+      if (data.formattedContent) {
         await updateFeatureCount("autoformat");
       }
 

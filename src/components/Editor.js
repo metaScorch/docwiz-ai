@@ -322,7 +322,7 @@ export default function Editor({
   const handleSuggestionSubmit = async (prompt, shouldFormat = false) => {
     if (!selection) return;
 
-    // Skip limit check if user has active subscription
+    // Only check limits for non-subscribed users
     if (!hasActiveSubscription) {
       const AMENDMENTS_LIMIT = 3;
       if (featureCounts.amendments >= AMENDMENTS_LIMIT) {
@@ -385,8 +385,8 @@ export default function Editor({
         });
       }
 
-      // Only update count if not subscribed and improvement was successful
-      if (!hasActiveSubscription && data.improvedText) {
+      // Always update count for analytics
+      if (data.improvedText) {
         await onUpdateFeatureCount("amendments");
       }
 
