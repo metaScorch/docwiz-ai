@@ -107,20 +107,23 @@ export function NewAgreementForm() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
+      // Start loading state early for subscription check
+      setLoading(true);
+      setGenerationStep(0);
+
       // Check limits only at submission time
       const limitInfo = await checkDocumentLimit(user.id);
       setLimitData(limitInfo);
       
       if (!limitInfo.allowed) {
+        setLoading(false); // Reset loading state
         setShowUpgrade(true);
         return;
       }
 
       setJurisdictionError(false);
-      setLoading(true);
-      setGenerationStep(0);
-
-      // Start the loading states animation immediately
+      
+      // Start the loading states animation
       const loadingStatesPromise = (async () => {
         for (let i = 0; i < generationSteps.length - 1; i++) {
           const delay = i === 4 ? 4000 : 2000;

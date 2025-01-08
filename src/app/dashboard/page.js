@@ -264,7 +264,6 @@ export default function DashboardPage() {
   const router = useRouter();
   const supabase = createClientComponentClient();
   const [registrations, setRegistrations] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     totalDocuments: 0,
     signedDocuments: 0,
@@ -285,105 +284,130 @@ export default function DashboardPage() {
   const [limitData, setLimitData] = useState(null);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
 
-  const checkLimit = async () => {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (user) {
-        const limitInfo = await checkDocumentLimit(user.id);
-        setLimitData(limitInfo);
-        return limitInfo;
-      }
-    } catch (error) {
-      console.error("Error checking document limit:", error);
-      toast.error("Failed to check document limit");
-    }
+  // Separate the data fetching into smaller, focused functions
+  const fetchDocuments = async (user_id) => {
+    const { data, error } = await supabase
+      .from("user_documents")
+      .select(
+        `
+        *,
+        template:templates(template_name)
+      `
+      )
+      .eq("user_id", user_id)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  };
+
+  const fetchRegistrations = async (user_id) => {
+    const { data, error } = await supabase
+      .from("registrations")
+      .select("*")
+      .eq("user_id", user_id)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    return data || [];
   };
 
   useEffect(() => {
-    async function fetchData() {
+    let mounted = true;
+
+    const initializeDashboard = async () => {
       try {
         const {
           data: { user },
         } = await supabase.auth.getUser();
-        if (!user) return;
+        if (!user || !mounted) return;
 
-        // Fetch registrations
-        const { data: registrationsData, error: registrationsError } =
-          await supabase
-            .from("registrations")
-            .select("*")
-            .eq("user_id", user.id)
-            .order("created_at", { ascending: false });
+        // Load essential data first
+        const documentsData = await fetchDocuments(user.id);
+        setUserDocuments(documentsData);
 
-        if (registrationsError) throw registrationsError;
-        setRegistrations(registrationsData || []);
+        // Process initial stats
+        const initialStats = processDocumentStats(documentsData);
+        setStats(initialStats);
+        setIsInitialized(true);
 
-        // Fetch user documents
-        const { data: documentsData, error: documentsError } = await supabase
-          .from("user_documents")
-          .select(
-            `
-            *,
-            template:templates(template_name)
-          `
-          )
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false });
+        // Load additional data in the background
+        Promise.all([fetchRegistrations(user.id), checkDocumentLimit(user.id)])
+          .then(([registrationsData, limitInfo]) => {
+            if (!mounted) return;
 
-        if (documentsError) throw documentsError;
-        setUserDocuments(documentsData || []);
+            setRegistrations(registrationsData);
+            setLimitData(limitInfo);
 
-        // Process documents to extract unique parties and count documents
-        const parties = new Map();
-        let totalDocs = documentsData.length;
-        let signedDocs = 0;
-
-        documentsData.forEach((doc) => {
-          // Count signed/completed documents
-          if (doc.status === "completed" || doc.status === "signed") {
-            signedDocs++;
-          }
-
-          const signers = doc.document?.signers || [];
-          signers.forEach((signer) => {
-            if (!parties.has(signer.email)) {
-              parties.set(signer.email, {
-                name: signer.name,
-                email: signer.email,
-                documents: [],
-              });
-            }
-
-            parties.get(signer.email).documents.push({
-              id: doc.id,
-              title: doc.title,
-              status: doc.status,
-              created_at: doc.created_at,
-              updated_at: doc.updated_at,
-            });
-          });
-        });
-
-        setUniqueParties(Array.from(parties.values()));
-        setStats({
-          totalDocuments: totalDocs,
-          signedDocuments: signedDocs,
-          totalParties: parties.size,
-        });
-
-        await checkLimit();
+            // Process parties data
+            const partiesData = processPartiesData(documentsData);
+            setUniqueParties(partiesData);
+          })
+          .catch(console.error);
       } catch (error) {
-        console.error("Error fetching data:", error);
-      } finally {
-        setLoading(false);
+        console.error("Error initializing dashboard:", error);
+        if (mounted) {
+          setIsInitialized(true); // Still set initialized to show at least partial data
+        }
       }
-    }
+    };
 
-    fetchData();
+    initializeDashboard();
+
+    return () => {
+      mounted = false;
+    };
   }, [supabase]);
+
+  // Helper function to process document stats
+  const processDocumentStats = (documents) => {
+    const totalDocs = documents.length;
+    const signedDocs = documents.filter(
+      (doc) => doc.status === "completed" || doc.status === "signed"
+    ).length;
+
+    return {
+      totalDocuments: totalDocs,
+      signedDocuments: signedDocs,
+      totalParties: 0, // Will be updated when parties data is processed
+    };
+  };
+
+  // Helper function to process parties data
+  const processPartiesData = (documents) => {
+    const parties = new Map();
+
+    documents.forEach((doc) => {
+      const signers = doc.document?.signers || [];
+      signers.forEach((signer) => {
+        if (!parties.has(signer.email)) {
+          parties.set(signer.email, {
+            name: signer.name,
+            email: signer.email,
+            documents: [],
+          });
+        }
+
+        parties.get(signer.email).documents.push({
+          id: doc.id,
+          title: doc.title,
+          status: doc.status,
+          created_at: doc.created_at,
+          updated_at: doc.updated_at,
+        });
+      });
+    });
+
+    // Update stats with total parties
+    setStats((prev) => ({
+      ...prev,
+      totalParties: parties.size,
+    }));
+
+    return Array.from(parties.values());
+  };
 
   const fetchTemplates = async () => {
     setLoadingTemplates(true);
@@ -537,7 +561,7 @@ export default function DashboardPage() {
     }
   };
 
-  if (loading) {
+  if (!isInitialized) {
     return (
       <div className="container mx-auto p-6 flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -939,7 +963,7 @@ export default function DashboardPage() {
           currentCount={limitData?.currentCount || 0}
           limit={limitData?.limit || 3}
           cycleEnd={limitData?.cycleEnd}
-          isLoading={loading}
+          isLoading={!isInitialized}
         />
       </div>
     </>
