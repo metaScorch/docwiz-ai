@@ -61,7 +61,7 @@ export async function checkDocumentLimit(userId) {
       throw error;
     }
 
-    const FREE_PLAN_LIMIT = 10;
+    const FREE_PLAN_LIMIT = 12;
     const currentCount = count || 0;
 
     return {

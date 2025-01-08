@@ -285,6 +285,8 @@ export default function DashboardPage() {
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [loadingTemplateCheck, setLoadingTemplateCheck] = useState(false);
+  const [loadingTemplateId, setLoadingTemplateId] = useState(null);
 
   // Separate the data fetching into smaller, focused functions
   const fetchDocuments = async (user_id) => {
@@ -512,14 +514,9 @@ export default function DashboardPage() {
     );
   });
 
-  // Separate the template selection from document creation
-  const handleTemplateClick = (template) => {
-    setSelectedTemplate(template);
-    handleTemplateLimit(template);
-  };
-
-  // Handle the limit check and document creation
-  const handleTemplateLimit = async (template) => {
+  // Update the template selection and limit check
+  const handleTemplateClick = async (template) => {
+    setLoadingTemplateId(template.id);
     try {
       const {
         data: { user },
@@ -531,12 +528,11 @@ export default function DashboardPage() {
       setLimitData(limitInfo);
 
       if (!limitInfo.allowed) {
-        setShowTemplateDialog(false); // Close template dialog
-        setShowUpgrade(true); // Show upgrade modal
+        setShowTemplateDialog(false);
+        setShowUpgrade(true);
         return;
       }
 
-      // Only proceed with document creation if under limit
       const { data: newDocument, error } = await supabase
         .from("user_documents")
         .insert([
@@ -553,11 +549,13 @@ export default function DashboardPage() {
         .single();
 
       if (error) throw error;
-      setShowTemplateDialog(false); // Close template dialog
+      setShowTemplateDialog(false);
       router.push(`/editor/document/${newDocument.id}`);
     } catch (error) {
       console.error("Error creating document:", error);
       toast.error("Failed to create document");
+    } finally {
+      setLoadingTemplateId(null);
     }
   };
 
@@ -776,8 +774,13 @@ export default function DashboardPage() {
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => handleTemplateClick(template)}
+                                disabled={loadingTemplateId === template.id}
                               >
-                                Select
+                                {loadingTemplateId === template.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  "Select"
+                                )}
                               </Button>
                             </TableCell>
                           </TableRow>
