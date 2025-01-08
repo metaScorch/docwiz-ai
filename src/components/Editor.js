@@ -67,6 +67,10 @@ export default function Editor({
   onChange,
   documentId,
   onImproveFormatting,
+  featureCounts,
+  onUpdateFeatureCount,
+  setCurrentFeature,
+  setShowUpgradeModal,
 }) {
   const [isMounted, setIsMounted] = useState(false);
   const [documentValues, setDocumentValues] = useState({});
@@ -317,6 +321,16 @@ export default function Editor({
   const handleSuggestionSubmit = async (prompt, shouldFormat = false) => {
     if (!selection) return;
 
+    const AMENDMENTS_LIMIT = 3;
+
+    if (featureCounts.amendments >= AMENDMENTS_LIMIT) {
+      setCurrentFeature("amendments");
+      setShowUpgradeModal(true);
+      setPopupPosition(null);
+      setSelection(null);
+      return;
+    }
+
     setIsProcessing(true);
     try {
       // First, improve the selected text
@@ -346,9 +360,7 @@ export default function Editor({
         const formatResponse = await fetch("/api/improve-formatting", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            content: updatedContent,
-          }),
+          body: JSON.stringify({ content: updatedContent }),
         });
 
         const formatData = await formatResponse.json();
@@ -368,6 +380,10 @@ export default function Editor({
           from: selection.from,
           to: selection.to,
         });
+      }
+
+      if (data.improvedText) {
+        await onUpdateFeatureCount("amendments");
       }
 
       setPopupPosition(null);

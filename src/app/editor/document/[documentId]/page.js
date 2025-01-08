@@ -9,6 +9,7 @@ import { formatDistanceToNow } from "date-fns";
 import { use } from "react";
 import LoadingModal from "@/components/LoadingModal";
 import { redirect } from "next/navigation";
+import { UpgradeModal } from "@/components/UpgradeModal";
 
 export default function EditorPage({ params }) {
   const resolvedParams = use(params);
@@ -20,6 +21,12 @@ export default function EditorPage({ params }) {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [, setForceUpdate] = useState(0);
   const [isFormatting, setIsFormatting] = useState(false);
+  const [featureCounts, setFeatureCounts] = useState({
+    amendments: 0,
+    autoformat: 0,
+  });
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [currentFeature, setCurrentFeature] = useState(null);
 
   const formatRelativeTime = (dateString) => {
     return formatDistanceToNow(new Date(dateString), { addSuffix: true });
@@ -67,6 +74,10 @@ export default function EditorPage({ params }) {
       if (document) {
         setUserDocument(document);
         setContent(document.content);
+        setFeatureCounts({
+          amendments: document.amendments_count || 0,
+          autoformat: document.autoformat_count || 0,
+        });
       }
     }
 
@@ -126,22 +137,47 @@ export default function EditorPage({ params }) {
     setIsEditingTitle(false);
   };
 
+  const updateFeatureCount = async (feature) => {
+    const countField =
+      feature === "amendments" ? "amendments_count" : "autoformat_count";
+    const newCount = featureCounts[feature] + 1;
+
+    const { error } = await supabase
+      .from("user_documents")
+      .update({ [countField]: newCount })
+      .eq("id", documentId);
+
+    if (!error) {
+      setFeatureCounts((prev) => ({
+        ...prev,
+        [feature]: newCount,
+      }));
+    }
+  };
+
   const handleImproveFormatting = async (currentContent) => {
+    const AUTOFORMAT_LIMIT = 3;
+
+    if (featureCounts.autoformat >= AUTOFORMAT_LIMIT) {
+      setCurrentFeature("autoformat");
+      setShowUpgradeModal(true);
+      return null;
+    }
+
     setIsFormatting(true);
     try {
       const response = await fetch("/api/improve-formatting", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          content: currentContent,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: currentContent }),
       });
 
       const data = await response.json();
-
       if (data.error) throw new Error(data.error);
+
+      if (data.formattedContent) {
+        await updateFeatureCount("autoformat");
+      }
 
       return data.formattedContent;
     } catch (error) {
@@ -217,6 +253,10 @@ export default function EditorPage({ params }) {
         onChange={handleContentChange}
         documentId={documentId}
         onImproveFormatting={handleImproveFormatting}
+        featureCounts={featureCounts}
+        onUpdateFeatureCount={updateFeatureCount}
+        setCurrentFeature={setCurrentFeature}
+        setShowUpgradeModal={setShowUpgradeModal}
       />
 
       <div className="mt-4 text-sm text-muted-foreground bg-muted p-3 rounded-md">
@@ -225,6 +265,14 @@ export default function EditorPage({ params }) {
       </div>
 
       <LoadingModal isOpen={isFormatting} onCancel={handleCancelFormatting} />
+
+      <UpgradeModal
+        open={showUpgradeModal}
+        onOpenChange={setShowUpgradeModal}
+        limit={currentFeature === "amendments" ? 3 : 3}
+        feature={currentFeature}
+        currentCount={currentFeature ? featureCounts[currentFeature] : 0}
+      />
     </div>
   );
 }
