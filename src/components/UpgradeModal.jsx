@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Check } from 'lucide-react';
 import {
@@ -9,6 +9,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { posthog } from '@/lib/posthog';
 
 export function UpgradeModal({ 
   open, 
@@ -19,6 +20,18 @@ export function UpgradeModal({
 }) {
   const router = useRouter();
   const [isRedirecting, setIsRedirecting] = useState(false);
+
+  // Track modal display
+  useEffect(() => {
+    if (open) {
+      posthog.capture('upgrade_modal_shown', {
+        feature,
+        current_count: currentCount,
+        limit,
+        usage_percentage: (currentCount / limit) * 100
+      });
+    }
+  }, [open, feature, currentCount, limit]);
 
   const getTitle = () => {
     if (feature === 'amendments') {
@@ -41,12 +54,32 @@ export function UpgradeModal({
   };
 
   const handleUpgradeClick = () => {
+    // Track upgrade click
+    posthog.capture('upgrade_button_clicked', {
+      feature,
+      current_count: currentCount,
+      limit,
+      source: 'upgrade_modal'
+    });
+
     setIsRedirecting(true);
     router.push("/pricing");
   };
 
+  const handleDismiss = () => {
+    // Track modal dismissal
+    posthog.capture('upgrade_modal_dismissed', {
+      feature,
+      current_count: currentCount,
+      limit,
+      usage_percentage: (currentCount / limit) * 100
+    });
+    
+    onOpenChange(false);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleDismiss}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle className="text-2xl font-semibold leading-tight text-center">
@@ -85,7 +118,7 @@ export function UpgradeModal({
         <div className="mt-6 flex justify-end space-x-2">
           <Button 
             variant="outline" 
-            onClick={() => onOpenChange(false)}
+            onClick={handleDismiss}
             className="w-full sm:w-auto"
           >
             Maybe Later

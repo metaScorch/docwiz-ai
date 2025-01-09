@@ -46,6 +46,7 @@ import { checkDocumentLimit } from "@/utils/usageLimits";
 import { toast } from "sonner";
 import { Toaster } from "sonner";
 import Link from "next/link";
+import { posthog } from "@/lib/posthog";
 
 const STATUS_FILTERS = [
   { value: "all", label: "All" },
@@ -416,6 +417,11 @@ export default function DashboardPage() {
     });
 
     setFilteredDocuments(filtered);
+    posthog.capture("documents_filtered", {
+      filter_status: selectedStatus,
+      search_query: documentSearchQuery,
+      results_count: filtered.length,
+    });
   }, [userDocuments, documentSearchQuery, selectedStatus]);
 
   // Helper function to process document stats
@@ -610,6 +616,11 @@ export default function DashboardPage() {
       if (error) throw error;
       setShowTemplateDialog(false);
       router.push(`/editor/document/${newDocument.id}`);
+      posthog.capture("template_selected", {
+        template_id: template.id,
+        template_name: template.template_name,
+        user_id: user.id,
+      });
     } catch (error) {
       console.error("Error creating document:", error);
       toast.error("Failed to create document");

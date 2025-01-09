@@ -12,6 +12,7 @@ import { UpgradeModal } from "@/components/UpgradeModal";
 import { checkDocumentLimit } from "@/utils/usageLimits";
 import { toast } from "sonner"; // Add Sonner import
 import { Toaster } from "sonner"; // Add Toaster import
+import { posthog } from '@/lib/posthog';
 
 export function NewAgreementForm() {
   const router = useRouter();
@@ -98,8 +99,14 @@ export function NewAgreementForm() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    const startTime = Date.now();
+    
     if (!jurisdiction) {
       setJurisdictionError(true);
+      // Track validation error
+      posthog.capture('agreement_generation_validation_error', {
+        error_type: 'missing_jurisdiction'
+      });
       return;
     }
 
@@ -107,7 +114,15 @@ export function NewAgreementForm() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      // Start loading state early for subscription check
+      // Track generation attempt
+      posthog.capture('agreement_generation_started', {
+        jurisdiction,
+        complexity,
+        length,
+        prompt_length: prompt.length,
+        has_subscription: false // Will be updated below
+      });
+
       setLoading(true);
       setGenerationStep(0);
 
@@ -136,10 +151,22 @@ export function NewAgreementForm() {
         setLimitData(limitInfo);
         
         if (!limitInfo.allowed) {
-          setLoading(false); // Reset loading state
+          setLoading(false);
           setShowUpgrade(true);
+          // Track limit reached
+          posthog.capture('agreement_generation_limit_reached', {
+            current_count: limitInfo.currentCount,
+            limit: limitInfo.limit,
+            cycle_end: limitInfo.cycleEnd
+          });
           return;
         }
+
+        posthog.capture('agreement_generation_limit_check', {
+          current_count: limitInfo.currentCount,
+          limit: limitInfo.limit,
+          remaining: limitInfo.limit - limitInfo.currentCount
+        });
       }
 
       setJurisdictionError(false);
@@ -174,6 +201,10 @@ export function NewAgreementForm() {
           details: "Rate limit exceeded",
           resetIn: data.resetIn
         });
+        // Track rate limit error
+        posthog.capture('agreement_generation_rate_limit', {
+          reset_in: data.resetIn
+        });
         return;
       }
       
@@ -182,16 +213,36 @@ export function NewAgreementForm() {
           message: "This agreement cannot be generated",
           details: data.legalityNotes
         });
+        // Track legality error
+        posthog.capture('agreement_generation_legality_error', {
+          jurisdiction,
+          error_details: data.legalityNotes
+        });
         return;
       }
 
       if (!response.ok) throw new Error(data.error);
 
       await loadingStatesPromise;
+      
+      // Track successful generation
+      posthog.capture('agreement_generation_completed', {
+        document_id: data.id,
+        generation_time: Date.now() - startTime,
+        complexity,
+        length,
+        jurisdiction
+      });
+
       router.push(`/editor/document/${data.id}`);
 
     } catch (error) {
       console.error('Error:', error);
+      // Track generation error
+      posthog.capture('agreement_generation_error', {
+        error_message: error.message,
+        error_type: error.name
+      });
       toast.error("Failed to generate agreement", {
         description: error.message
       });
@@ -255,6 +306,31 @@ export function NewAgreementForm() {
     return `${hours} hour${hours > 1 ? 's' : ''} ${remainingMinutes > 0 ? `and ${remainingMinutes} minute${remainingMinutes > 1 ? 's' : ''}` : ''}`;
   };
 
+  // Track form field changes
+  const handleComplexityChange = (value) => {
+    setComplexity(value);
+    posthog.capture('agreement_complexity_changed', {
+      complexity: value,
+      complexity_label: getComplexityLabel(value)
+    });
+  };
+
+  const handleLengthChange = (value) => {
+    setLength(value);
+    posthog.capture('agreement_length_changed', {
+      length: value,
+      length_label: getLengthLabel(value)
+    });
+  };
+
+  const handleJurisdictionChange = (value) => {
+    setJurisdiction(value);
+    posthog.capture('agreement_jurisdiction_changed', {
+      jurisdiction: value,
+      is_default: value === `${userRegistration?.city_name}, ${userRegistration?.state_name}, ${userRegistration?.country_name}`
+    });
+  };
+
   return (
     <>
       <Toaster />
@@ -303,7 +379,7 @@ Example: I need a non-disclosure agreement for a freelance developer who will be
           </label>
           <JurisdictionSearch
             value={jurisdiction}
-            onChange={setJurisdiction}
+            onChange={handleJurisdictionChange}
             defaultValue={userRegistration ? 
               `${userRegistration.city_name}, ${userRegistration.state_name}, ${userRegistration.country_name}` : 
               "Select jurisdiction"
@@ -328,7 +404,7 @@ Example: I need a non-disclosure agreement for a freelance developer who will be
               max={5}
               step={1}
               value={[complexity]}
-              onValueChange={([value]) => setComplexity(value)}
+              onValueChange={([value]) => handleComplexityChange(value)}
               className="w-full"
               style={{
                 "--slider-color": "#0700c7"
@@ -344,7 +420,7 @@ Example: I need a non-disclosure agreement for a freelance developer who will be
               max={5}
               step={1}
               value={[length]}
-              onValueChange={([value]) => setLength(value)}
+              onValueChange={([value]) => handleLengthChange(value)}
               className="w-full"
               style={{
                 "--slider-color": "#0700c7"

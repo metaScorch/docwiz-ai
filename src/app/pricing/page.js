@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { Check } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { FaStar } from "react-icons/fa";
 import Image from "next/image";
 import {
@@ -24,6 +24,7 @@ import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { Button } from "@/components/ui/button";
 import { loadStripe } from "@stripe/stripe-js";
 import { Loader2 } from "lucide-react";
+import { posthog } from "@/lib/posthog";
 
 const STRIPE_PRICE_IDS = {
   UNLIMITED: {
@@ -98,12 +99,32 @@ export default function PricingPage() {
   const supabase = createClientComponentClient();
   const [isLoading, setIsLoading] = useState(false);
 
+  // Track page view
+  useEffect(() => {
+    posthog.capture("pricing_page_viewed", {
+      referrer: document.referrer,
+      is_authenticated: !!supabase.auth.user,
+    });
+  }, []);
+
+  // Track billing period toggle
   const handleToggle = () => {
     setIsMonthly(!isMonthly);
+    posthog.capture("pricing_period_changed", {
+      new_period: !isMonthly ? "monthly" : "yearly",
+    });
   };
 
   const handleSubscription = async (plan) => {
+    // Track subscription attempt
+    posthog.capture("subscription_started", {
+      plan_name: plan.name,
+      billing_period: isMonthly ? "monthly" : "yearly",
+      price: isMonthly ? plan.price : plan.yearlyPrice,
+    });
+
     if (plan.name === "ENTERPRISE") {
+      posthog.capture("enterprise_contact_clicked");
       window.open("https://tally.so/r/wgYL9K", "_blank");
       return;
     }
@@ -208,7 +229,19 @@ export default function PricingPage() {
       if (result.error) {
         throw new Error(result.error.message);
       }
+
+      // Track successful redirect to checkout
+      posthog.capture("checkout_redirect_success", {
+        session_id: sessionId,
+        plan_name: plan.name,
+      });
     } catch (error) {
+      // Track errors
+      posthog.capture("subscription_error", {
+        error_message: error.message,
+        plan_name: plan.name,
+        billing_period: isMonthly ? "monthly" : "yearly",
+      });
       console.error("Error in subscription process:", error);
     } finally {
       setIsLoading(false);

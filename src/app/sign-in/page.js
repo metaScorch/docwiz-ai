@@ -12,11 +12,15 @@ import { Mail, Lock, Loader2 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { FcGoogle } from "react-icons/fc";
+import { posthog } from "@/lib/posthog";
 
 export default function SignIn() {
   const router = useRouter();
   const supabase = createClientComponentClient();
   const [loading, setLoading] = useState(false);
+
+
+  
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isProcessingAuth, setIsProcessingAuth] = useState(true);
@@ -47,6 +51,9 @@ export default function SignIn() {
 
             router.push("/dashboard");
             toast.success("Email verified successfully!");
+            posthog.capture("email_verified", {
+              success: true,
+            });
             return;
           }
         }
@@ -124,6 +131,10 @@ export default function SignIn() {
         },
       });
       if (error) throw error;
+      posthog.capture("auth_attempt", {
+        provider: "google",
+        success: true,
+      });
     } catch (error) {
       console.error("Error signing in with Google:", error);
       toast.error("Failed to sign in with Google");
@@ -144,6 +155,9 @@ export default function SignIn() {
       });
       if (error) throw error;
       toast.success("Magic link sent to your email!");
+      posthog.capture("magic_link_requested", {
+        email_domain: email.split("@")[1],
+      });
     } catch (error) {
       console.error("Error sending magic link:", error);
       toast.error(error.message || "Failed to send magic link");
