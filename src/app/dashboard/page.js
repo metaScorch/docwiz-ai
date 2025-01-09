@@ -655,7 +655,18 @@ export default function DashboardPage() {
               <DropdownMenuItem
                 onClick={async () => {
                   try {
-                    // First get user's registration
+                    // First get current user session
+                    const {
+                      data: { session },
+                    } = await supabase.auth.getSession();
+
+                    if (!session) {
+                      console.error("No session found");
+                      router.push("/sign-in");
+                      return;
+                    }
+
+                    // Get user's registration
                     const { data: registration, error: regError } =
                       await supabase
                         .from("registrations")
@@ -669,7 +680,7 @@ export default function DashboardPage() {
                       return;
                     }
 
-                    // Then check subscription status using registration_id
+                    // Check subscription status using registration_id
                     const { data: subscription, error: subError } =
                       await supabase
                         .from("subscriptions")
@@ -677,25 +688,32 @@ export default function DashboardPage() {
                         .eq("registration_id", registration.id)
                         .single();
 
-                    // If no subscription or error, redirect to pricing
-                    if (subError || !subscription) {
-                      router.push("/pricing");
-                      return;
-                    }
+                    console.log("Subscription data:", subscription); // Debug log
 
                     // If subscribed with Stripe subscription, open customer portal
                     if (
-                      subscription.status === "active" &&
-                      subscription.stripe_subscription_id
+                      subscription?.status === "active" &&
+                      subscription?.stripe_subscription_id
                     ) {
                       const response = await fetch(
                         "/api/create-billing-portal",
                         {
                           method: "POST",
+                          headers: {
+                            "Content-Type": "application/json",
+                          },
                         }
                       );
+
+                      if (!response.ok) {
+                        throw new Error(
+                          `HTTP error! status: ${response.status}`
+                        );
+                      }
+
                       const { session_url, error } = await response.json();
                       if (error) throw new Error(error);
+
                       window.location.href = session_url;
                     } else {
                       // If not subscribed or no Stripe subscription, open pricing page
@@ -703,7 +721,7 @@ export default function DashboardPage() {
                     }
                   } catch (error) {
                     console.error("Error handling billing:", error);
-                    // If any error occurs, redirect to pricing page
+                    toast.error("Failed to access billing portal");
                     router.push("/pricing");
                   }
                 }}
