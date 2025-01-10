@@ -39,7 +39,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { UserCircle } from "lucide-react";
+import { UserCircle, CreditCard, LogOut } from "lucide-react";
 import { Loader2 } from "lucide-react";
 import { UpgradeModal } from "@/components/UpgradeModal";
 import { checkDocumentLimit } from "@/utils/usageLimits";
@@ -290,6 +290,7 @@ export default function DashboardPage() {
   const [isInitialized, setIsInitialized] = useState(false);
   const [loadingTemplateCheck, setLoadingTemplateCheck] = useState(false);
   const [loadingTemplateId, setLoadingTemplateId] = useState(null);
+  const [isLoadingBilling, setIsLoadingBilling] = useState(false);
 
   // Separate the data fetching into smaller, focused functions
   const fetchDocuments = async (user_id) => {
@@ -640,6 +641,16 @@ export default function DashboardPage() {
   return (
     <>
       <Toaster />
+      {isLoadingBilling && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-2">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground">
+              Loading billing details...
+            </p>
+          </div>
+        </div>
+      )}
       <div className="container mx-auto p-6 space-y-6">
         {/* Logo and Account Section */}
         <div className="flex justify-between items-center mb-8">
@@ -660,11 +671,16 @@ export default function DashboardPage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem onClick={() => router.push("/profile")}>
+              <DropdownMenuItem
+                onClick={() => router.push("/profile")}
+                className="flex items-center gap-2"
+              >
+                <UserCircle className="h-4 w-4" />
                 Profile
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={async () => {
+                  setIsLoadingBilling(true);
                   try {
                     // First get current user session
                     const {
@@ -734,9 +750,13 @@ export default function DashboardPage() {
                     console.error("Error handling billing:", error);
                     toast.error("Failed to access billing portal");
                     router.push("/pricing");
+                  } finally {
+                    setIsLoadingBilling(false);
                   }
                 }}
+                className="flex items-center gap-2"
               >
+                <CreditCard className="h-4 w-4" />
                 Billing
               </DropdownMenuItem>
               <DropdownMenuItem
@@ -744,8 +764,9 @@ export default function DashboardPage() {
                   await supabase.auth.signOut();
                   router.push("/sign-in");
                 }}
-                className="text-red-600"
+                className="text-red-600 flex items-center gap-2"
               >
+                <LogOut className="h-4 w-4" />
                 Logout
               </DropdownMenuItem>
             </DropdownMenuContent>
