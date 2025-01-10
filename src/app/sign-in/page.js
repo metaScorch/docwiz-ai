@@ -2,174 +2,215 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import Link from "next/link";
 
-// A simple sign-in page
 export default function SignInPage() {
   const router = useRouter();
   const supabase = createClientComponentClient();
-
-  // UI states
+  const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showMagicLink, setShowMagicLink] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
+  const [authMode, setAuthMode] = useState("password"); // 'password' or 'magic-link'
 
   // Check if user is already signed in
   useEffect(() => {
-    checkSessionOnMount();
-  }, []);
-
-  async function checkSessionOnMount() {
-    try {
-      const { data, error } = await supabase.auth.getSession();
-      if (data.session) {
-        // If user is already logged in, navigate to dashboard
-        router.push("/dashboard");
+    const checkSession = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        if (!user.email_confirmed_at) {
+          router.push("/verify-email");
+        } else {
+          router.push("/dashboard");
+        }
       }
-    } catch (error) {
-      // ignore for now
-    }
-  }
+    };
 
-  // Switch between "magic link" form and "password" form
-  const toggleMagicLink = () => {
-    setShowMagicLink(!showMagicLink);
-    setPassword(""); // reset password when toggling
-    setErrorMsg("");
-  };
+    checkSession();
+  }, [router, supabase]);
 
-  // Core sign-in function
-  const handleSignIn = async (e) => {
+  const handleEmailPasswordSignIn = async (e) => {
     e.preventDefault();
-    setErrorMsg("");
     setIsLoading(true);
 
     try {
-      // If using magic link
-      if (showMagicLink) {
-        const { error } = await supabase.auth.signInWithOtp({
-          email,
-          options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback`, // auto-login after email confirm
-            shouldCreateUser: false, // only if you want to block new-user creation
-          },
-        });
-        if (error) throw error;
-        alert("Magic link sent! Check your email.");
-        return;
-      }
-
-      // Else sign in with email/password
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
+
       if (error) throw error;
 
-      // If user’s email is not confirmed, you can handle that logic here:
-      // e.g., if (!data.user.email_confirmed_at) { ... }
-
-      // If success, navigate to dashboard
-      router.push("/dashboard");
-    } catch (err) {
-      setErrorMsg(err.message);
+      if (!data.user.email_confirmed_at) {
+        router.push("/verify-email");
+      } else {
+        router.push("/dashboard");
+      }
+    } catch (error) {
+      console.error("Error:", error);
+      toast.error(error.message);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Google OAuth sign in
   const handleGoogleSignIn = async () => {
-    setIsLoading(true);
-    setErrorMsg("");
     try {
+      setIsLoading(true);
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`, // let supabase handle
+          redirectTo: `${window.location.origin}/auth/callback`,
         },
       });
+
       if (error) throw error;
-      // The user will be redirected automatically by Supabase
-    } catch (err) {
-      setErrorMsg(err.message);
+    } catch (error) {
+      console.error("Error:", error);
+      toast.error("Failed to sign in with Google");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleMagicLinkSignIn = async (e) => {
+    e.preventDefault();
+    setIsLoading(true);
+
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+
+      if (error) throw error;
+
+      toast.success("Check your email for the magic link!");
+    } catch (error) {
+      console.error("Error:", error);
+      toast.error("Failed to send magic link");
+    } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div style={{ maxWidth: 400, margin: "80px auto", padding: 16 }}>
-      <h1>Sign In</h1>
-
-      {errorMsg && (
-        <div style={{ background: "#fee2e2", padding: 8, marginBottom: 8 }}>
-          {errorMsg}
-        </div>
-      )}
-
-      <button
-        onClick={handleGoogleSignIn}
-        style={{
-          width: "100%",
-          padding: "8px 16px",
-          marginBottom: 8,
-          cursor: "pointer",
-        }}
-        disabled={isLoading}
-      >
-        Sign In With Google
-      </button>
-
-      <button
-        onClick={toggleMagicLink}
-        style={{ width: "100%", padding: "8px 16px", marginBottom: 16 }}
-      >
-        {showMagicLink ? "Use Password Instead" : "Use Magic Link Instead"}
-      </button>
-
-      <form onSubmit={handleSignIn}>
-        <div style={{ marginBottom: 8 }}>
-          <label>Email</label>
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            style={{ width: "100%", padding: 8, marginTop: 4 }}
-          />
+    <div className="min-h-screen flex flex-col items-center justify-center p-4">
+      <div className="w-full max-w-md space-y-8">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold">Welcome back</h1>
+          <p className="text-muted-foreground mt-2">
+            Sign in to your account to continue
+          </p>
         </div>
 
-        {!showMagicLink && (
-          <div style={{ marginBottom: 8 }}>
-            <label>Password</label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              style={{ width: "100%", padding: 8, marginTop: 4 }}
-            />
-          </div>
-        )}
-
-        <button
-          type="submit"
-          style={{ width: "100%", padding: "8px 16px", cursor: "pointer" }}
+        <Button
+          variant="outline"
+          className="w-full"
+          onClick={handleGoogleSignIn}
           disabled={isLoading}
         >
-          {isLoading
-            ? "Loading..."
-            : showMagicLink
-              ? "Send Magic Link"
-              : "Sign In"}
-        </button>
-      </form>
+          {isLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+          ) : (
+            <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24">
+              {/* Google icon SVG path */}
+            </svg>
+          )}
+          Continue with Google
+        </Button>
 
-      <div style={{ marginTop: 16, fontSize: 14 }}>
-        Don’t have an account? <Link href="/register">Register Here</Link>
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t" />
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-background px-2 text-muted-foreground">
+              Or continue with
+            </span>
+          </div>
+        </div>
+
+        <Tabs value={authMode} onValueChange={setAuthMode} className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="password">Password</TabsTrigger>
+            <TabsTrigger value="magic-link">Magic Link</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="password">
+            <form onSubmit={handleEmailPasswordSignIn} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+              </div>
+
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : null}
+                Sign in
+              </Button>
+            </form>
+          </TabsContent>
+
+          <TabsContent value="magic-link">
+            <form onSubmit={handleMagicLinkSignIn} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="magic-link-email">Email</Label>
+                <Input
+                  id="magic-link-email"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : null}
+                Send Magic Link
+              </Button>
+            </form>
+          </TabsContent>
+        </Tabs>
+
+        <p className="text-center text-sm text-muted-foreground">
+          Don&apos;t have an account?{" "}
+          <Link href="/register" className="text-primary hover:underline">
+            Sign up
+          </Link>
+        </p>
       </div>
     </div>
   );

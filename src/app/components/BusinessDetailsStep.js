@@ -1,4 +1,7 @@
+"use client";
+
 import { useState, useEffect } from "react";
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -10,10 +13,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-import { extractBusinessDomain } from "@/utils/emailUtils";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { extractBusinessDomain } from "@/utils/emailUtils";
 
 const industries = [
   "Technology",
@@ -21,55 +23,66 @@ const industries = [
   "Healthcare",
   "Education",
   "Retail",
+  "Manufacturing",
+  "Professional Services",
+  "Media & Entertainment",
+  "Real Estate",
   "Other",
 ];
 
 export default function BusinessDetailsStep({ onNext, registrationId }) {
   const supabase = createClientComponentClient();
-  const [domain, setDomain] = useState("");
-  const [description, setDescription] = useState("");
-  const [industry, setIndustry] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    domain: "",
+    description: "",
+    industry: "",
+  });
 
   useEffect(() => {
-    const fetchUserEmailAndDomain = async () => {
+    const fetchExistingData = async () => {
       try {
+        // Get registration data if it exists
         const { data: registration } = await supabase
           .from("registrations")
-          .select("domain")
+          .select("domain, description, industry")
           .eq("id", registrationId)
           .single();
 
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
+        if (registration) {
+          setFormData({
+            domain: registration.domain || "",
+            description: registration.description || "",
+            industry: registration.industry || "",
+          });
+        }
 
-        // Only set domain if it's not already set in registration
-        if (!registration?.domain && user?.email) {
-          const businessDomain = extractBusinessDomain(user.email);
-          if (businessDomain) {
-            setDomain(businessDomain);
+        // If no domain is set, try to extract it from user's email
+        if (!registration?.domain) {
+          const {
+            data: { user },
+          } = await supabase.auth.getUser();
+          if (user?.email) {
+            const businessDomain = extractBusinessDomain(user.email);
+            if (businessDomain) {
+              setFormData((prev) => ({ ...prev, domain: businessDomain }));
+            }
           }
-        } else if (registration?.domain) {
-          setDomain(registration.domain);
         }
       } catch (error) {
-        console.error("Error fetching user email:", error);
+        console.error("Error fetching business details:", error);
+        toast.error("Failed to load existing business details");
       }
     };
 
-    fetchUserEmailAndDomain();
-  }, [supabase.auth, registrationId]);
+    fetchExistingData();
+  }, [registrationId, supabase]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    try {
-      console.log("Updating registration:", registrationId, {
-        domain,
-        description,
-        industry,
-      });
+    setIsLoading(true);
 
+    try {
       if (!registrationId) {
         throw new Error("Registration ID is missing");
       }
@@ -77,23 +90,23 @@ export default function BusinessDetailsStep({ onNext, registrationId }) {
       const { error } = await supabase
         .from("registrations")
         .update({
-          domain,
-          description,
-          industry,
+          ...formData,
           updated_at: new Date().toISOString(),
         })
         .eq("id", registrationId);
 
       if (error) throw error;
-      onNext({ domain, description, industry });
+      onNext(formData);
     } catch (error) {
       console.error("Failed to update business details:", error);
-      // You might want to add error handling UI here
+      toast.error("Failed to save business details");
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const fetchBusinessInfo = async () => {
-    if (!domain) {
+    if (!formData.domain) {
       toast.error("Please enter a domain first");
       return;
     }
@@ -102,36 +115,22 @@ export default function BusinessDetailsStep({ onNext, registrationId }) {
     try {
       const response = await fetch("/api/fetch-business-info", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ domain }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domain: formData.domain }),
       });
-
-      if (response.status === 429) {
-        // Handle rate limit error
-        const data = await response.json();
-        const hours = Math.floor(data.resetIn / 3600);
-        const minutes = Math.floor((data.resetIn % 3600) / 60);
-
-        toast.error(
-          `Rate limit exceeded. You can make ${data.limit} requests per ${data.period}. ` +
-            `Please try again in ${hours}h ${minutes}m.`
-        );
-        return;
-      }
 
       if (!response.ok) {
         throw new Error("Failed to fetch business information");
       }
 
       const data = await response.json();
-      if (data.description) {
-        setDescription(data.description);
-        if (data.industry && industries.includes(data.industry)) {
-          setIndustry(data.industry);
-        }
-        toast.success("Business information fetched successfully");
+      if (data.description || data.industry) {
+        setFormData((prev) => ({
+          ...prev,
+          description: data.description || prev.description,
+          industry: data.industry || prev.industry,
+        }));
+        toast.success("Business information updated");
       }
     } catch (error) {
       console.error("Error:", error);
@@ -142,62 +141,92 @@ export default function BusinessDetailsStep({ onNext, registrationId }) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="domain">Business Website</Label>
-        <Input
-          id="domain"
-          placeholder="Enter business website"
-          value={domain}
-          onChange={(e) => setDomain(e.target.value)}
-          required
-        />
+    <div className="max-w-2xl mx-auto space-y-6">
+      <div className="text-center">
+        <h1 className="text-2xl font-bold">Business Details</h1>
+        <p className="text-muted-foreground mt-2">
+          Tell us more about your business
+        </p>
       </div>
-      <div className="space-y-2">
-        <div className="flex justify-between items-center">
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="domain">Business Website</Label>
+          <div className="flex gap-2">
+            <Input
+              id="domain"
+              placeholder="example.com"
+              value={formData.domain}
+              onChange={(e) =>
+                setFormData({ ...formData, domain: e.target.value })
+              }
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={fetchBusinessInfo}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                "Auto-fill"
+              )}
+            </Button>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="industry">Industry</Label>
+          <Select
+            value={formData.industry}
+            onValueChange={(value) =>
+              setFormData({ ...formData, industry: value })
+            }
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select your industry" />
+            </SelectTrigger>
+            <SelectContent>
+              {industries.map((industry) => (
+                <SelectItem key={industry} value={industry}>
+                  {industry}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
           <Label htmlFor="description">Business Description</Label>
+          <Textarea
+            id="description"
+            placeholder="Tell us about your business..."
+            value={formData.description}
+            onChange={(e) =>
+              setFormData({ ...formData, description: e.target.value })
+            }
+            rows={4}
+          />
+        </div>
+
+        <div className="flex gap-4 pt-4">
           <Button
             type="button"
-            onClick={fetchBusinessInfo}
-            disabled={isLoading}
-            size="sm"
+            variant="outline"
+            className="w-full"
+            onClick={() => onNext(formData)}
           >
+            Skip
+          </Button>
+          <Button type="submit" className="w-full" disabled={isLoading}>
             {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Fetching...
-              </>
-            ) : (
-              "Auto-fetch from website"
-            )}
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            ) : null}
+            Next
           </Button>
         </div>
-        <Textarea
-          id="description"
-          placeholder="Enter business description"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          required
-        />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="industry">Industry</Label>
-        <Select value={industry} onValueChange={setIndustry} required>
-          <SelectTrigger>
-            <SelectValue placeholder="Select industry" />
-          </SelectTrigger>
-          <SelectContent>
-            {industries.map((ind) => (
-              <SelectItem key={ind} value={ind}>
-                {ind}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <Button type="submit" className="w-full">
-        Next
-      </Button>
-    </form>
+      </form>
+    </div>
   );
 }

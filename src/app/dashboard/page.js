@@ -328,21 +328,32 @@ export default function DashboardPage() {
         } = await supabase.auth.getSession();
         if (!session) return;
 
-        // First get user's registration
-        const { data: registration } = await supabase
+        console.log("Current user ID:", session.user.id);
+
+        // Simplified registration check - just check if any registration exists
+        const { data: registration, error: regError } = await supabase
           .from("registrations")
           .select("id")
           .eq("user_id", session.user.id)
-          .single();
+          .maybeSingle();
 
-        if (!registration) return;
+        console.log("Registration data:", registration);
+        console.log("Registration error:", regError);
+
+        if (!registration) {
+          console.log("No registration found, redirecting to complete-signup");
+          router.push("/complete-signup");
+          return;
+        }
+
+        console.log("Registration found, continuing with dashboard");
 
         // Check subscription status - removed plan from select
         const { data: subscription } = await supabase
           .from("subscriptions")
           .select("status")
           .eq("registration_id", registration.id)
-          .single();
+          .maybeSingle();
 
         // Set subscription status for limit checking - removed plan check
         const hasActiveSubscription = subscription?.status === "active";
@@ -397,7 +408,7 @@ export default function DashboardPage() {
     }
 
     fetchDocumentsAndSubscription();
-  }, [supabase]);
+  }, [router, supabase]);
 
   // Add useEffect to handle document filtering
   useEffect(() => {

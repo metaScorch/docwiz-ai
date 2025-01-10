@@ -1,91 +1,27 @@
+"use client";
+
 import { useState } from "react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { supabase } from "@/lib/supabase";
-import { toast } from "sonner";
-import Image from "next/image";
-import { extractBusinessDomain } from "@/utils/emailUtils";
-import { FcGoogle } from "react-icons/fc";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Info } from "lucide-react";
+import Link from "next/link";
+import { toast } from "sonner";
 
-export default function SignupStep({ onNext, onError }) {
-  const [loading, setLoading] = useState(false);
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-
+export default function SignupStep({ onNext }) {
   const supabase = createClientComponentClient();
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      setLoading(true);
-
-      // Check if user exists using the check-email API endpoint
-      const emailCheckResponse = await fetch("/api/check-email", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email }),
-      });
-
-      if (!emailCheckResponse.ok) {
-        const data = await emailCheckResponse.json();
-        if (emailCheckResponse.status === 400) {
-          onError("This email is already registered. Please sign in instead.");
-          return;
-        }
-        throw new Error(data.error || "Failed to check email");
-      }
-
-      // Proceed with signup if email doesn't exist
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { full_name: name },
-        },
-      });
-
-      if (authError) throw authError;
-
-      // Only proceed with registration if user creation was successful
-      const { data: registration, error: registrationError } = await supabase
-        .from("registrations")
-        .insert([
-          {
-            user_id: authData.user.id,
-            status: "pending",
-            domain: extractBusinessDomain(email),
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-        ])
-        .select()
-        .single();
-
-      if (registrationError) throw registrationError;
-
-      // Progress to next step
-      onNext({
-        name,
-        email,
-        registrationId: registration.id,
-        userId: authData.user.id,
-      });
-
-      toast.success("Please check your email to verify your account.");
-    } catch (error) {
-      onError(error.message || "Error during signup");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [isLoading, setIsLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+    fullName: "",
+  });
 
   const handleGoogleSignUp = async () => {
     try {
+      setIsLoading(true);
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
@@ -94,77 +30,142 @@ export default function SignupStep({ onNext, onError }) {
       });
       if (error) throw error;
     } catch (error) {
-      console.error("Error signing up with Google:", error);
+      console.error("Error:", error);
       toast.error("Failed to sign up with Google");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEmailSignUp = async (e) => {
+    e.preventDefault();
+    setIsLoading(true);
+
+    try {
+      // 1. Sign up with Supabase Auth
+      const { data, error } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          data: { full_name: formData.fullName },
+        },
+      });
+      if (error) throw error;
+
+      // 2. Create registration record
+      const { data: regData, error: regError } = await supabase
+        .from("registrations")
+        .insert({
+          user_id: data.user?.id,
+          status: "pending",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (regError) throw regError;
+
+      // Move to next step with registration data
+      onNext({ registrationId: regData.id, email: formData.email });
+    } catch (error) {
+      console.error("Error:", error);
+      toast.error(error.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-center mb-6">
-        <Image
-          src="/logo.png"
-          alt="DocWiz Logo"
-          width={200}
-          height={60}
-          priority
-        />
+    <div className="max-w-md mx-auto space-y-6">
+      <div className="text-center">
+        <h1 className="text-2xl font-bold">Create your account</h1>
+        <p className="text-muted-foreground mt-2">
+          Get started with our platform
+        </p>
       </div>
-      <h1 className="text-2xl font-semibold text-center mb-6">Signup</h1>
-      <form onSubmit={handleSubmit} className="space-y-4">
+
+      <Button
+        variant="outline"
+        className="w-full"
+        onClick={handleGoogleSignUp}
+        disabled={isLoading}
+      >
+        Continue with Google
+      </Button>
+
+      <div className="relative">
+        <div className="absolute inset-0 flex items-center">
+          <span className="w-full border-t" />
+        </div>
+        <div className="relative flex justify-center text-xs uppercase">
+          <span className="bg-background px-2 text-muted-foreground">
+            Or continue with
+          </span>
+        </div>
+      </div>
+
+      <form onSubmit={handleEmailSignUp} className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="name">Name</Label>
+          <Label htmlFor="fullName">Full Name</Label>
           <Input
-            id="name"
-            placeholder="Enter your name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+            id="fullName"
+            placeholder="John Doe"
+            value={formData.fullName}
+            onChange={(e) =>
+              setFormData({ ...formData, fullName: e.target.value })
+            }
             required
           />
         </div>
+
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>
           <Input
             id="email"
             type="email"
-            placeholder="Enter your email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+            value={formData.email}
+            onChange={(e) =>
+              setFormData({ ...formData, email: e.target.value })
+            }
             required
           />
         </div>
+
         <div className="space-y-2">
           <Label htmlFor="password">Password</Label>
           <Input
             id="password"
             type="password"
-            placeholder="Enter your password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Create a password"
+            value={formData.password}
+            onChange={(e) =>
+              setFormData({ ...formData, password: e.target.value })
+            }
             required
           />
         </div>
-        <Button type="submit" disabled={loading} className="w-full">
-          {loading ? "Loading..." : "Sign Up with Email"}
+
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertDescription>
+            Password must be at least 8 characters long
+          </AlertDescription>
+        </Alert>
+
+        <Button type="submit" className="w-full" disabled={isLoading}>
+          {isLoading ? "Creating Account..." : "Create Account"}
         </Button>
       </form>
-      <div className="relative my-4">
-        <div className="absolute inset-0 flex items-center">
-          <span className="w-full border-t" />
-        </div>
-        <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-white px-2 text-gray-500">Or continue with</span>
-        </div>
-      </div>
-      <Button
-        type="button"
-        variant="outline"
-        className="w-full"
-        onClick={handleGoogleSignUp}
-      >
-        <FcGoogle className="mr-2 h-5 w-5" />
-        Sign up with Google
-      </Button>
+
+      <p className="text-center text-sm text-muted-foreground">
+        Already have an account?{" "}
+        <Link href="/sign-in" className="text-primary hover:underline">
+          Sign in
+        </Link>
+      </p>
     </div>
   );
 }
