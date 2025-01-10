@@ -42,13 +42,32 @@ export default function OrganizationTypeStep({ onNext, registrationId }) {
           throw new Error("Registration ID is missing");
         }
 
+        // First, verify this registration belongs to the current user
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) throw new Error("No authenticated user");
+
+        const { data: existingReg } = await supabase
+          .from("registrations")
+          .select("id")
+          .eq("id", registrationId)
+          .eq("user_id", user.id)
+          .single();
+
+        if (!existingReg) {
+          throw new Error("Registration not found or unauthorized");
+        }
+
+        // Update the existing registration
         const { error } = await supabase
           .from("registrations")
           .update({
             organization_type: type,
             updated_at: new Date().toISOString(),
           })
-          .eq("id", registrationId);
+          .eq("id", registrationId)
+          .eq("user_id", user.id); // Add user_id check for extra security
 
         if (error) throw error;
         onNext({ organizationType: type });

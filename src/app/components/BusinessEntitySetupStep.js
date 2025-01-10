@@ -94,10 +94,16 @@ export default function BusinessEntitySetupStep({
 
   const fetchExistingData = async () => {
     try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("No authenticated user");
+
       const { data: registration } = await supabase
         .from("registrations")
         .select("*")
         .eq("id", registrationId)
+        .eq("user_id", user.id)
         .single();
 
       if (registration) {
@@ -139,6 +145,24 @@ export default function BusinessEntitySetupStep({
     setIsLoading(true);
 
     try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("No authenticated user");
+
+      // Verify registration belongs to user
+      const { data: existingReg } = await supabase
+        .from("registrations")
+        .select("id")
+        .eq("id", registrationId)
+        .eq("user_id", user.id)
+        .single();
+
+      if (!existingReg) {
+        throw new Error("Registration not found or unauthorized");
+      }
+
+      // Update the existing registration
       const { error } = await supabase
         .from("registrations")
         .update({
@@ -155,7 +179,8 @@ export default function BusinessEntitySetupStep({
           status: "completed",
           updated_at: new Date().toISOString(),
         })
-        .eq("id", registrationId);
+        .eq("id", registrationId)
+        .eq("user_id", user.id);
 
       if (error) throw error;
       router.push("/verify-email");

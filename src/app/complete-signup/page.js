@@ -4,19 +4,21 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import OrganizationTypeStep from "../components/OrganizationTypeStep";
-import BusinessDetailsStep from "../components/BusinessDetailsStep";
-import EntityDetailsStep from "../components/EntityDetailsStep";
+import BusinessEntitySetupStep from "../components/BusinessEntitySetupStep";
 import { toast } from "sonner";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import Image from "next/image";
 
 export default function CompleteSignupPage() {
   const router = useRouter();
   const supabase = createClientComponentClient();
   const [currentStep, setCurrentStep] = useState(0);
   const [registrationId, setRegistrationId] = useState(null);
+  const [email, setEmail] = useState("");
 
-  // Check for existing session and create registration if needed
   useEffect(() => {
-    const initializeRegistration = async () => {
+    const checkSession = async () => {
       try {
         const {
           data: { user },
@@ -27,21 +29,51 @@ export default function CompleteSignupPage() {
           return;
         }
 
-        // Check for existing registration
-        const { data: existingReg, error: fetchError } = await supabase
+        // First check for ANY existing registration for this user
+        const { data: registrations, error: fetchError } = await supabase
           .from("registrations")
-          .select("id, status")
+          .select("id, status, organization_type")
           .eq("user_id", user.id)
-          .maybeSingle(); // Using maybeSingle() instead of single() to avoid error
+          .order("created_at", { ascending: false })
+          .limit(1);
 
-        if (existingReg) {
-          if (existingReg.status === "completed") {
-            router.push("/dashboard");
-            return;
+        if (fetchError) throw fetchError;
+
+        if (registrations && registrations.length > 0) {
+          const registration = registrations[0];
+          setRegistrationId(registration.id);
+
+          // Determine which step to show based on registration status
+          if (registration.status === "completed") {
+            if (!user.email_confirmed_at) {
+              router.push("/verify-email");
+            } else {
+              router.push("/dashboard");
+            }
+          } else if (registration.organization_type) {
+            setCurrentStep(1);
+          } else {
+            setCurrentStep(0);
           }
-          setRegistrationId(existingReg.id);
+
+          // If there are multiple registrations for this user, clean up duplicates
+          if (registrations.length > 1) {
+            const keepId = registration.id;
+            const { error: cleanupError } = await supabase
+              .from("registrations")
+              .delete()
+              .eq("user_id", user.id)
+              .neq("id", keepId);
+
+            if (cleanupError) {
+              console.error(
+                "Error cleaning up duplicate registrations:",
+                cleanupError
+              );
+            }
+          }
         } else {
-          // Create new registration
+          // No registration exists, create one
           const { data: newReg, error: insertError } = await supabase
             .from("registrations")
             .insert([
@@ -58,43 +90,29 @@ export default function CompleteSignupPage() {
           if (insertError) throw insertError;
           setRegistrationId(newReg.id);
         }
+
+        setEmail(user.email || "");
       } catch (error) {
-        console.error("Error initializing registration:", error);
+        console.error("Error checking session:", error);
         toast.error("Failed to initialize registration");
       }
     };
 
-    initializeRegistration();
+    checkSession();
   }, [router, supabase]);
 
   const handleOrganizationTypeComplete = () => {
     setCurrentStep(1);
   };
 
-  const handleBusinessDetailsComplete = () => {
-    setCurrentStep(2);
-  };
-
-  const handleEntityDetailsComplete = async () => {
-    try {
-      // Update registration status to completed
-      const { error } = await supabase
-        .from("registrations")
-        .update({
-          status: "completed",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", registrationId);
-
-      if (error) throw error;
-
-      // Redirect to dashboard
-      router.push("/dashboard");
-    } catch (error) {
-      console.error("Error completing registration:", error);
-      toast.error("Failed to complete registration");
+  const handleBack = () => {
+    if (currentStep > 0) {
+      setCurrentStep(currentStep - 1);
     }
   };
+
+  const totalSteps = 2; // Only org type and business setup
+  const progress = ((currentStep + 1) / totalSteps) * 100;
 
   const renderCurrentStep = () => {
     if (!registrationId) return null;
@@ -105,20 +123,18 @@ export default function CompleteSignupPage() {
           <OrganizationTypeStep
             onNext={handleOrganizationTypeComplete}
             registrationId={registrationId}
+            currentStep={currentStep + 1}
+            totalSteps={totalSteps}
           />
         );
       case 1:
         return (
-          <BusinessDetailsStep
-            onNext={handleBusinessDetailsComplete}
+          <BusinessEntitySetupStep
+            onNext={() => {}}
+            onBack={handleBack}
             registrationId={registrationId}
-          />
-        );
-      case 2:
-        return (
-          <EntityDetailsStep
-            onNext={handleEntityDetailsComplete}
-            registrationId={registrationId}
+            currentStep={currentStep + 1}
+            totalSteps={totalSteps}
           />
         );
       default:
@@ -127,8 +143,30 @@ export default function CompleteSignupPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-4xl">{renderCurrentStep()}</div>
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-b from-blue-50 to-purple-100 dark:from-blue-950 dark:to-purple-900">
+      <Card className="w-full max-w-[600px]">
+        <CardHeader className="space-y-1">
+          <div className="flex justify-center mb-4">
+            <Image
+              src="/logo.png"
+              alt="DocWiz Logo"
+              width={200}
+              height={60}
+              priority
+            />
+          </div>
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm text-muted-foreground">
+              <span>
+                Step {currentStep + 1} of {totalSteps}
+              </span>
+              <span>{Math.round(progress)}% completed</span>
+            </div>
+            <Progress value={progress} className="h-2" />
+          </div>
+        </CardHeader>
+        <CardContent>{renderCurrentStep()}</CardContent>
+      </Card>
     </div>
   );
 }
