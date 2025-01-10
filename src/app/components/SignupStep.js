@@ -16,6 +16,7 @@ export default function SignupStep({ onNext }) {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isEmailLoading, setIsEmailLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [emailError, setEmailError] = useState("");
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -43,9 +44,42 @@ export default function SignupStep({ onNext }) {
   const handleEmailSignUp = async (e) => {
     e.preventDefault();
     setIsEmailLoading(true);
+    setEmailError("");
 
     try {
-      // 1. Sign up with Supabase Auth
+      // First check if email exists
+      const checkResponse = await fetch("/api/check-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: formData.email }),
+      });
+
+      const checkData = await checkResponse.json();
+
+      if (!checkResponse.ok) {
+        if (checkResponse.status === 400) {
+          // Email exists, send magic link
+          const { error: magicLinkError } = await supabase.auth.signInWithOtp({
+            email: formData.email,
+            options: {
+              emailRedirectTo: `${window.location.origin}/auth/callback`,
+            },
+          });
+
+          if (magicLinkError) throw magicLinkError;
+
+          setEmailError(
+            "This email is already registered. We've sent you a magic link to sign in!"
+          );
+          toast.success(
+            "This email is already registered. We've sent you a magic link to sign in!"
+          );
+          return;
+        }
+        throw new Error(checkData.error || "Failed to check email");
+      }
+
+      // Email is available, proceed with signup
       const { data, error } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
@@ -56,52 +90,29 @@ export default function SignupStep({ onNext }) {
       });
       if (error) throw error;
 
-      // 2. Check for existing registration
-      const { data: existingReg } = await supabase
+      // Create new registration
+      const { data: regData, error: regError } = await supabase
         .from("registrations")
-        .select("id")
-        .eq("user_id", data.user?.id)
+        .insert({
+          user_id: data.user?.id,
+          status: "pending",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .select()
         .single();
 
-      let registrationId;
-
-      if (existingReg) {
-        // Update existing registration
-        const { error: updateError } = await supabase
-          .from("registrations")
-          .update({
-            status: "pending",
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", existingReg.id);
-
-        if (updateError) throw updateError;
-        registrationId = existingReg.id;
-      } else {
-        // Create new registration
-        const { data: regData, error: regError } = await supabase
-          .from("registrations")
-          .insert({
-            user_id: data.user?.id,
-            status: "pending",
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .select()
-          .single();
-
-        if (regError) throw regError;
-        registrationId = regData.id;
-      }
+      if (regError) throw regError;
 
       // Move to next step with registration data
       onNext({
         id: data.user?.id,
         email: formData.email,
-        registrationId: registrationId,
+        registrationId: regData.id,
       });
     } catch (error) {
       console.error("Error:", error);
+      setEmailError(error.message);
       toast.error(error.message);
     } finally {
       setIsEmailLoading(false);
@@ -116,6 +127,13 @@ export default function SignupStep({ onNext }) {
         </CardTitle>
         <CardDescription>Get started with DocWiz</CardDescription>
       </div>
+
+      {emailError && (
+        <Alert variant="destructive">
+          <Info className="h-4 w-4" />
+          <AlertDescription>{emailError}</AlertDescription>
+        </Alert>
+      )}
 
       <Button
         variant="outline"
