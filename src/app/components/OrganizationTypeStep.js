@@ -32,10 +32,13 @@ const organizationTypes = [
 export default function OrganizationTypeStep({ onNext, registrationId }) {
   const supabase = createClientComponentClient();
 
+  console.log("Organization Type Step - Registration ID:", registrationId);
+
   const handleSelection = useCallback(
     async (type) => {
       try {
         if (!registrationId) {
+          console.error("Registration ID is missing:", registrationId);
           throw new Error("Registration ID is missing");
         }
 

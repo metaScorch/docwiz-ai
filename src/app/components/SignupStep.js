@@ -56,22 +56,50 @@ export default function SignupStep({ onNext }) {
       });
       if (error) throw error;
 
-      // 2. Create registration record
-      const { data: regData, error: regError } = await supabase
+      // 2. Check for existing registration
+      const { data: existingReg } = await supabase
         .from("registrations")
-        .insert({
-          user_id: data.user?.id,
-          status: "pending",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .select()
+        .select("id")
+        .eq("user_id", data.user?.id)
         .single();
 
-      if (regError) throw regError;
+      let registrationId;
+
+      if (existingReg) {
+        // Update existing registration
+        const { error: updateError } = await supabase
+          .from("registrations")
+          .update({
+            status: "pending",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", existingReg.id);
+
+        if (updateError) throw updateError;
+        registrationId = existingReg.id;
+      } else {
+        // Create new registration
+        const { data: regData, error: regError } = await supabase
+          .from("registrations")
+          .insert({
+            user_id: data.user?.id,
+            status: "pending",
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .select()
+          .single();
+
+        if (regError) throw regError;
+        registrationId = regData.id;
+      }
 
       // Move to next step with registration data
-      onNext({ registrationId: regData.id, email: formData.email });
+      onNext({
+        id: data.user?.id,
+        email: formData.email,
+        registrationId: registrationId,
+      });
     } catch (error) {
       console.error("Error:", error);
       toast.error(error.message);

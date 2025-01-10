@@ -26,29 +26,37 @@ export default function RegisterPage() {
   const [registrationId, setRegistrationId] = useState(null);
   const [email, setEmail] = useState("");
 
-  // Check for existing session
+  // Check for existing session and registration
   useEffect(() => {
     const checkSession = async () => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
+
       if (user) {
         // If user exists, check for existing registration
         const { data: registration } = await supabase
           .from("registrations")
-          .select("id, status")
+          .select("id, status, organization_type")
           .eq("user_id", user.id)
           .single();
 
         if (registration) {
           setRegistrationId(registration.id);
-          // If registration exists but incomplete, continue from last step
+
+          // Determine which step to show based on registration status
           if (registration.status === "completed") {
             if (!user.email_confirmed_at) {
               router.push("/verify-email");
             } else {
               router.push("/dashboard");
             }
+          } else if (registration.organization_type) {
+            // If org type exists, show business setup
+            setCurrentStep(2);
+          } else {
+            // If no org type, show org type selection
+            setCurrentStep(1);
           }
         }
         setEmail(user.email || "");
@@ -59,30 +67,9 @@ export default function RegisterPage() {
   }, [router, supabase]);
 
   const handleSignupComplete = async (userData) => {
-    try {
-      // Create registration record after successful signup
-      const { data: registration, error } = await supabase
-        .from("registrations")
-        .insert([
-          {
-            user_id: userData.id,
-            status: "pending",
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-        ])
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      setRegistrationId(registration.id);
-      setEmail(userData.email);
-      setCurrentStep(1);
-    } catch (error) {
-      console.error("Error creating registration:", error);
-      toast.error("Failed to initialize registration");
-    }
+    setEmail(userData.email);
+    setRegistrationId(userData.registrationId);
+    setCurrentStep(1);
   };
 
   const handleOrganizationTypeComplete = () => {

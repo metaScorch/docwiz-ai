@@ -1,7 +1,7 @@
 "use client";
 
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -659,481 +659,485 @@ export default function DashboardPage() {
     }
   }, [limitData]); // Only run when limitData changes
 
-  if (!isInitialized) {
-    return (
-      <div className="container mx-auto p-6 flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
   return (
-    <>
-      <Toaster />
-      {isLoadingBilling && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-2">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-sm text-muted-foreground">
-              Loading billing details...
-            </p>
-          </div>
+    <Suspense
+      fallback={
+        <div className="container mx-auto p-6 flex items-center justify-center min-h-screen">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
-      )}
-      <div className="container mx-auto p-6 space-y-6">
-        {/* Logo and Account Section */}
-        <div className="flex justify-between items-center mb-8">
-          <Image
-            src="/logo.png"
-            alt="DocWiz Logo"
-            width={180}
-            height={60}
-            priority
-            className="h-auto"
-          />
+      }
+    >
+      <>
+        <Toaster />
+        {isLoadingBilling && (
+          <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
+            <div className="flex flex-col items-center gap-2">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="text-sm text-muted-foreground">
+                Loading billing details...
+              </p>
+            </div>
+          </div>
+        )}
+        <div className="container mx-auto p-6 space-y-6">
+          {/* Logo and Account Section */}
+          <div className="flex justify-between items-center mb-8">
+            <Image
+              src="/logo.png"
+              alt="DocWiz Logo"
+              width={180}
+              height={60}
+              priority
+              className="h-auto"
+            />
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="flex items-center gap-2">
-                <UserCircle className="h-5 w-5" />
-                My Account
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem
-                onClick={() => router.push("/profile")}
-                className="flex items-center gap-2"
-              >
-                <UserCircle className="h-4 w-4" />
-                Profile
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={async () => {
-                  setIsLoadingBilling(true);
-                  try {
-                    const {
-                      data: { session },
-                    } = await supabase.auth.getSession();
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="flex items-center gap-2">
+                  <UserCircle className="h-5 w-5" />
+                  My Account
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem
+                  onClick={() => router.push("/profile")}
+                  className="flex items-center gap-2"
+                >
+                  <UserCircle className="h-4 w-4" />
+                  Profile
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={async () => {
+                    setIsLoadingBilling(true);
+                    try {
+                      const {
+                        data: { session },
+                      } = await supabase.auth.getSession();
 
-                    if (!session) {
-                      console.error("No session found");
-                      router.push("/sign-in");
-                      return;
-                    }
-
-                    // Get user's registration
-                    const { data: registration, error: regError } =
-                      await supabase
-                        .from("registrations")
-                        .select("id, stripe_customer_id")
-                        .eq("user_id", session.user.id)
-                        .maybeSingle();
-
-                    // Handle case where no registration exists
-                    if (!registration || regError) {
-                      console.log(
-                        "No registration found or error occurred:",
-                        regError
-                      );
-                      router.push("/pricing");
-                      return;
-                    }
-
-                    // Check subscription status using registration_id
-                    const { data: subscription, error: subError } =
-                      await supabase
-                        .from("subscriptions")
-                        .select("status, stripe_subscription_id")
-                        .eq("registration_id", registration.id)
-                        .maybeSingle();
-
-                    console.log("Subscription data:", subscription);
-
-                    // If subscribed with Stripe subscription, open customer portal
-                    if (
-                      subscription?.status === "active" &&
-                      subscription?.stripe_subscription_id
-                    ) {
-                      const response = await fetch(
-                        "/api/create-billing-portal",
-                        {
-                          method: "POST",
-                          headers: {
-                            "Content-Type": "application/json",
-                          },
-                        }
-                      );
-
-                      if (!response.ok) {
-                        throw new Error(
-                          `HTTP error! status: ${response.status}`
-                        );
+                      if (!session) {
+                        console.error("No session found");
+                        router.push("/sign-in");
+                        return;
                       }
 
-                      const { session_url, error } = await response.json();
-                      if (error) throw new Error(error);
+                      // Get user's registration
+                      const { data: registration, error: regError } =
+                        await supabase
+                          .from("registrations")
+                          .select("id, stripe_customer_id")
+                          .eq("user_id", session.user.id)
+                          .maybeSingle();
 
-                      window.location.href = session_url;
-                    } else {
-                      // If not subscribed or no Stripe subscription, open pricing page
+                      // Handle case where no registration exists
+                      if (!registration || regError) {
+                        console.log(
+                          "No registration found or error occurred:",
+                          regError
+                        );
+                        router.push("/pricing");
+                        return;
+                      }
+
+                      // Check subscription status using registration_id
+                      const { data: subscription, error: subError } =
+                        await supabase
+                          .from("subscriptions")
+                          .select("status, stripe_subscription_id")
+                          .eq("registration_id", registration.id)
+                          .maybeSingle();
+
+                      console.log("Subscription data:", subscription);
+
+                      // If subscribed with Stripe subscription, open customer portal
+                      if (
+                        subscription?.status === "active" &&
+                        subscription?.stripe_subscription_id
+                      ) {
+                        const response = await fetch(
+                          "/api/create-billing-portal",
+                          {
+                            method: "POST",
+                            headers: {
+                              "Content-Type": "application/json",
+                            },
+                          }
+                        );
+
+                        if (!response.ok) {
+                          throw new Error(
+                            `HTTP error! status: ${response.status}`
+                          );
+                        }
+
+                        const { session_url, error } = await response.json();
+                        if (error) throw new Error(error);
+
+                        window.location.href = session_url;
+                      } else {
+                        // If not subscribed or no Stripe subscription, open pricing page
+                        router.push("/pricing");
+                      }
+                    } catch (error) {
+                      console.error("Error handling billing:", error);
+                      toast.error("Failed to access billing portal");
                       router.push("/pricing");
+                    } finally {
+                      setIsLoadingBilling(false);
                     }
-                  } catch (error) {
-                    console.error("Error handling billing:", error);
-                    toast.error("Failed to access billing portal");
-                    router.push("/pricing");
-                  } finally {
-                    setIsLoadingBilling(false);
-                  }
-                }}
-                className="flex items-center gap-2"
-              >
-                <CreditCard className="h-4 w-4" />
-                Billing
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={async () => {
-                  await supabase.auth.signOut();
-                  router.push("/sign-in");
-                }}
-                className="text-red-600 flex items-center gap-2"
-              >
-                <LogOut className="h-4 w-4" />
-                Logout
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <CreditCard className="h-4 w-4" />
+                  Billing
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={async () => {
+                    await supabase.auth.signOut();
+                    router.push("/sign-in");
+                  }}
+                  className="text-red-600 flex items-center gap-2"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
 
-        {/* Stats Section */}
-        <div className="grid gap-4 md:grid-cols-3">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Total Documents
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalDocuments}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader
-              className="flex flex-row items-center justify-between space-y-0 pb-2 cursor-pointer"
-              onClick={() => setShowSignedDocsDialog(true)}
-            >
-              <CardTitle className="text-sm font-medium">
-                Signed Documents
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div
-                className="text-2xl font-bold cursor-pointer"
+          {/* Stats Section */}
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  Total Documents
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.totalDocuments}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader
+                className="flex flex-row items-center justify-between space-y-0 pb-2 cursor-pointer"
                 onClick={() => setShowSignedDocsDialog(true)}
               >
-                {stats.signedDocuments}
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader
-              className="flex flex-row items-center justify-between space-y-0 pb-2 cursor-pointer"
-              onClick={() => setShowPartiesDialog(true)}
-            >
-              <CardTitle className="text-sm font-medium">
-                Total Parties
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div
-                className="text-2xl font-bold cursor-pointer"
+                <CardTitle className="text-sm font-medium">
+                  Signed Documents
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div
+                  className="text-2xl font-bold cursor-pointer"
+                  onClick={() => setShowSignedDocsDialog(true)}
+                >
+                  {stats.signedDocuments}
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader
+                className="flex flex-row items-center justify-between space-y-0 pb-2 cursor-pointer"
                 onClick={() => setShowPartiesDialog(true)}
               >
-                {stats.totalParties}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                <CardTitle className="text-sm font-medium">
+                  Total Parties
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div
+                  className="text-2xl font-bold cursor-pointer"
+                  onClick={() => setShowPartiesDialog(true)}
+                >
+                  {stats.totalParties}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
-        <div className="flex space-x-4 items-center">
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button className="bg-[#0700c7] text-white hover:bg-[#0700c7]/90">
-                <Wand2 className="mr-1 h-4 w-2" />
-                Generate Agreement Using AI
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
-              <DialogHeader>
-                <DialogTitle>Create New Agreement</DialogTitle>
-              </DialogHeader>
-              <NewAgreementForm />
-            </DialogContent>
-          </Dialog>
-          <div className="text-muted-foreground">or</div>
-          <Dialog
-            open={showTemplateDialog}
-            onOpenChange={setShowTemplateDialog}
-          >
-            <DialogTrigger asChild>
-              <Button
-                variant="outline"
-                className="bg-white text-[#0700c7] border-[#0700c7] hover:bg-[#0700c7]/10"
-                onClick={fetchTemplates}
-              >
-                Select A Template
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-[900px] max-h-[80vh]">
-              <DialogHeader>
-                <DialogTitle className="text-xl mb-4">
-                  Select A Template To Customize
-                </DialogTitle>
-                <div className="mb-4">
+          <div className="flex space-x-4 items-center">
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button className="bg-[#0700c7] text-white hover:bg-[#0700c7]/90">
+                  <Wand2 className="mr-1 h-4 w-2" />
+                  Generate Agreement Using AI
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle>Create New Agreement</DialogTitle>
+                </DialogHeader>
+                <NewAgreementForm />
+              </DialogContent>
+            </Dialog>
+            <div className="text-muted-foreground">or</div>
+            <Dialog
+              open={showTemplateDialog}
+              onOpenChange={setShowTemplateDialog}
+            >
+              <DialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="bg-white text-[#0700c7] border-[#0700c7] hover:bg-[#0700c7]/10"
+                  onClick={fetchTemplates}
+                >
+                  Select A Template
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-[900px] max-h-[80vh]">
+                <DialogHeader>
+                  <DialogTitle className="text-xl mb-4">
+                    Select A Template To Customize
+                  </DialogTitle>
+                  <div className="mb-4">
+                    <Input
+                      type="text"
+                      placeholder="Search templates..."
+                      value={templateSearchQuery}
+                      onChange={(e) => setTemplateSearchQuery(e.target.value)}
+                      className="max-w-sm"
+                    />
+                  </div>
+                </DialogHeader>
+                {loadingTemplates ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  </div>
+                ) : (
+                  <div className="relative overflow-hidden">
+                    <div className="max-h-[50vh] overflow-auto">
+                      <Table>
+                        <TableHeader className="sticky top-0 bg-white z-10">
+                          <TableRow>
+                            <TableHead className="w-[200px]">
+                              Template Name
+                            </TableHead>
+                            <TableHead className="w-[200px]">
+                              Ideal For
+                            </TableHead>
+                            <TableHead>Description</TableHead>
+                            <TableHead className="w-[100px] text-right">
+                              Actions
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredTemplates.map((template) => (
+                            <TableRow key={template.id}>
+                              <TableCell className="font-medium">
+                                {template.template_name}
+                              </TableCell>
+                              <TableCell>
+                                {JSON.parse(template.ideal_for).join(", ")}
+                              </TableCell>
+                              <TableCell className="max-w-[400px] truncate">
+                                {template.description}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleTemplateClick(template)}
+                                  disabled={loadingTemplateId === template.id}
+                                >
+                                  {loadingTemplateId === template.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    "Select"
+                                  )}
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          {filteredTemplates.length === 0 && (
+                            <TableRow>
+                              <TableCell
+                                colSpan={4}
+                                className="text-center text-muted-foreground"
+                              >
+                                No templates found matching your search.
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          {/* Documents Table */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent Documents</CardTitle>
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {STATUS_FILTERS.map((filter) => (
+                    <Button
+                      key={filter.value}
+                      variant="outline"
+                      size="sm"
+                      className={`${
+                        selectedStatus === filter.value
+                          ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                          : "hover:bg-muted"
+                      }`}
+                      onClick={() => setSelectedStatus(filter.value)}
+                    >
+                      {filter.value !== "all" && (
+                        <span
+                          className={`mr-2 h-2 w-2 rounded-full ${
+                            filter.value === "draft"
+                              ? "bg-yellow-500"
+                              : filter.value === "pending_signature"
+                                ? "bg-blue-500"
+                                : filter.value === "completed"
+                                  ? "bg-green-500"
+                                  : "bg-gray-500"
+                          }`}
+                        />
+                      )}
+                      {filter.label}
+                    </Button>
+                  ))}
+                </div>
+                <div>
                   <Input
                     type="text"
-                    placeholder="Search templates..."
-                    value={templateSearchQuery}
-                    onChange={(e) => setTemplateSearchQuery(e.target.value)}
+                    placeholder="Search documents..."
+                    value={documentSearchQuery}
+                    onChange={(e) => setDocumentSearchQuery(e.target.value)}
                     className="max-w-sm"
                   />
                 </div>
-              </DialogHeader>
-              {loadingTemplates ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </div>
-              ) : (
-                <div className="relative overflow-hidden">
-                  <div className="max-h-[50vh] overflow-auto">
-                    <Table>
-                      <TableHeader className="sticky top-0 bg-white z-10">
-                        <TableRow>
-                          <TableHead className="w-[200px]">
-                            Template Name
-                          </TableHead>
-                          <TableHead className="w-[200px]">Ideal For</TableHead>
-                          <TableHead>Description</TableHead>
-                          <TableHead className="w-[100px] text-right">
-                            Actions
-                          </TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredTemplates.map((template) => (
-                          <TableRow key={template.id}>
-                            <TableCell className="font-medium">
-                              {template.template_name}
-                            </TableCell>
-                            <TableCell>
-                              {JSON.parse(template.ideal_for).join(", ")}
-                            </TableCell>
-                            <TableCell className="max-w-[400px] truncate">
-                              {template.description}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleTemplateClick(template)}
-                                disabled={loadingTemplateId === template.id}
-                              >
-                                {loadingTemplateId === template.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  "Select"
-                                )}
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                        {filteredTemplates.length === 0 && (
-                          <TableRow>
-                            <TableCell
-                              colSpan={4}
-                              className="text-center text-muted-foreground"
-                            >
-                              No templates found matching your search.
-                            </TableCell>
-                          </TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </div>
-              )}
-            </DialogContent>
-          </Dialog>
-        </div>
-
-        {/* Documents Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Documents</CardTitle>
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-wrap gap-2 mt-2">
-                {STATUS_FILTERS.map((filter) => (
-                  <Button
-                    key={filter.value}
-                    variant="outline"
-                    size="sm"
-                    className={`${
-                      selectedStatus === filter.value
-                        ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                        : "hover:bg-muted"
-                    }`}
-                    onClick={() => setSelectedStatus(filter.value)}
-                  >
-                    {filter.value !== "all" && (
-                      <span
-                        className={`mr-2 h-2 w-2 rounded-full ${
-                          filter.value === "draft"
-                            ? "bg-yellow-500"
-                            : filter.value === "pending_signature"
-                              ? "bg-blue-500"
-                              : filter.value === "completed"
-                                ? "bg-green-500"
-                                : "bg-gray-500"
-                        }`}
-                      />
-                    )}
-                    {filter.label}
-                  </Button>
-                ))}
               </div>
-              <div>
-                <Input
-                  type="text"
-                  placeholder="Search documents..."
-                  value={documentSearchQuery}
-                  onChange={(e) => setDocumentSearchQuery(e.target.value)}
-                  className="max-w-sm"
-                />
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Title</TableHead>
-                  <TableHead>Template</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead>Last Updated</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredDocuments.map((doc) => (
-                  <TableRow key={doc.id}>
-                    <TableCell className="font-medium">{doc.title}</TableCell>
-                    <TableCell>
-                      {doc.template?.template_name || "Custom Document"}
-                    </TableCell>
-                    <TableCell>
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          doc.status === "draft"
-                            ? "bg-yellow-100 text-yellow-800 border border-yellow-200"
-                            : doc.status === "completed" ||
-                                doc.status === "signed"
-                              ? "bg-green-100 text-green-800 border border-green-200"
-                              : doc.status === "pending_signature"
-                                ? "bg-blue-100 text-blue-800 border border-blue-200"
-                                : "bg-gray-100 text-gray-800 border border-gray-200"
-                        }`}
-                      >
-                        {doc.status === "pending_signature"
-                          ? "Pending Signature"
-                          : doc.status === "draft"
-                            ? "Draft"
-                            : doc.status === "completed" ||
-                                doc.status === "signed"
-                              ? "Completed"
-                              : doc.status}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <span className="text-xs text-muted-foreground">
-                          {formatRelativeTime(doc.created_at)}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <span className="text-xs text-muted-foreground">
-                          {formatRelativeTime(doc.updated_at || doc.created_at)}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() =>
-                          router.push(`/editor/document/${doc.id}`)
-                        }
-                      >
-                        {doc.status === "draft" ? "Edit" : "View"}
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {filteredDocuments.length === 0 && (
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell
-                      colSpan={6}
-                      className="text-center text-muted-foreground"
-                    >
-                      No documents found matching your search.
-                    </TableCell>
+                    <TableHead>Title</TableHead>
+                    <TableHead>Template</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead>Last Updated</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                </TableHeader>
+                <TableBody>
+                  {filteredDocuments.map((doc) => (
+                    <TableRow key={doc.id}>
+                      <TableCell className="font-medium">{doc.title}</TableCell>
+                      <TableCell>
+                        {doc.template?.template_name || "Custom Document"}
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            doc.status === "draft"
+                              ? "bg-yellow-100 text-yellow-800 border border-yellow-200"
+                              : doc.status === "completed" ||
+                                  doc.status === "signed"
+                                ? "bg-green-100 text-green-800 border border-green-200"
+                                : doc.status === "pending_signature"
+                                  ? "bg-blue-100 text-blue-800 border border-blue-200"
+                                  : "bg-gray-100 text-gray-800 border border-gray-200"
+                          }`}
+                        >
+                          {doc.status === "pending_signature"
+                            ? "Pending Signature"
+                            : doc.status === "draft"
+                              ? "Draft"
+                              : doc.status === "completed" ||
+                                  doc.status === "signed"
+                                ? "Completed"
+                                : doc.status}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="text-xs text-muted-foreground">
+                            {formatRelativeTime(doc.created_at)}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="text-xs text-muted-foreground">
+                            {formatRelativeTime(
+                              doc.updated_at || doc.created_at
+                            )}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            router.push(`/editor/document/${doc.id}`)
+                          }
+                        >
+                          {doc.status === "draft" ? "Edit" : "View"}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {filteredDocuments.length === 0 && (
+                    <TableRow>
+                      <TableCell
+                        colSpan={6}
+                        className="text-center text-muted-foreground"
+                      >
+                        No documents found matching your search.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
 
-        <PartiesDialog
-          open={showPartiesDialog}
-          onOpenChange={setShowPartiesDialog}
-          parties={filteredParties}
-          searchQuery={partySearchQuery}
-          onSearchChange={setPartySearchQuery}
-          formatRelativeTime={formatRelativeTime}
-          router={router}
-        />
+          <PartiesDialog
+            open={showPartiesDialog}
+            onOpenChange={setShowPartiesDialog}
+            parties={filteredParties}
+            searchQuery={partySearchQuery}
+            onSearchChange={setPartySearchQuery}
+            formatRelativeTime={formatRelativeTime}
+            router={router}
+          />
 
-        <SignedDocumentsDialog
-          open={showSignedDocsDialog}
-          onOpenChange={setShowSignedDocsDialog}
-          documents={filteredSignedDocuments}
-          searchQuery={signedDocsSearchQuery}
-          onSearchChange={setSignedDocsSearchQuery}
-          formatRelativeTime={formatRelativeTime}
-        />
+          <SignedDocumentsDialog
+            open={showSignedDocsDialog}
+            onOpenChange={setShowSignedDocsDialog}
+            documents={filteredSignedDocuments}
+            searchQuery={signedDocsSearchQuery}
+            onSearchChange={setSignedDocsSearchQuery}
+            formatRelativeTime={formatRelativeTime}
+          />
 
-        {limitData && limitData.current !== undefined && (
-          <div className="text-sm text-muted-foreground mb-2">
-            You have used {limitData.current} out of {limitData.limit} documents
-            this month.{" "}
-            <Link href="/pricing" className="text-primary hover:underline">
-              Upgrade to get unlimited documents
-            </Link>
-          </div>
-        )}
+          {limitData && limitData.current !== undefined && (
+            <div className="text-sm text-muted-foreground mb-2">
+              You have used {limitData.current} out of {limitData.limit}{" "}
+              documents this month.{" "}
+              <Link href="/pricing" className="text-primary hover:underline">
+                Upgrade to get unlimited documents
+              </Link>
+            </div>
+          )}
 
-        <UpgradeModal
-          open={showUpgrade}
-          onOpenChange={setShowUpgrade}
-          currentCount={limitData?.currentCount || 0}
-          limit={limitData?.limit || 3}
-          cycleEnd={limitData?.cycleEnd}
-          isLoading={!isInitialized}
-        />
-      </div>
-    </>
+          <UpgradeModal
+            open={showUpgrade}
+            onOpenChange={setShowUpgrade}
+            currentCount={limitData?.currentCount || 0}
+            limit={limitData?.limit || 3}
+            cycleEnd={limitData?.cycleEnd}
+            isLoading={!isInitialized}
+          />
+        </div>
+      </>
+    </Suspense>
   );
 }
