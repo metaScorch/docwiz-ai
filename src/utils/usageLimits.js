@@ -1,80 +1,40 @@
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 
 export async function checkDocumentLimit(userId) {
-  const supabase = createClientComponentClient();
-
   try {
-    // First get user's registration
-    const { data: registration } = await supabase
+    const supabase = createClientComponentClient();
+
+    // Get the most recent registration
+    const { data: registrations, error: regError } = await supabase
       .from("registrations")
       .select("id")
       .eq("user_id", userId)
-      .single();
+      .order("created_at", { ascending: false });
 
-    if (!registration) {
+    if (regError) throw new Error("Error fetching registration");
+    if (!registrations || registrations.length === 0) {
       throw new Error("No registration found");
     }
 
-    // Check subscription status using registration_id
-    const { data: subscription } = await supabase
-      .from("subscriptions")
-      .select("status")
-      .eq("registration_id", registration.id)
-      .single();
+    // Use the most recent registration
+    const registrationId = registrations[0].id;
 
-    // If user has active subscription, no limits
-    if (subscription?.status === "active") {
-      return {
-        allowed: true,
-        currentCount: 0,
-        limit: Infinity,
-        cycleEnd: null,
-        isPaid: true,
-      };
-    }
-
-    // Get user's creation date for billing cycle calculation
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-    if (userError || !user) {
-      throw new Error("Failed to get user data");
-    }
-
-    const userCreatedAt = new Date(user.created_at);
-    const now = new Date();
-
-    // Calculate current billing cycle
-    const cycleStart = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      userCreatedAt.getDate()
-    );
-    if (cycleStart > now) {
-      cycleStart.setMonth(cycleStart.getMonth() - 1);
-    }
-
-    // Calculate cycle end
-    const cycleEnd = new Date(cycleStart);
-    cycleEnd.setMonth(cycleEnd.getMonth() + 1);
-
-    // Count documents created in current cycle
-    const { count } = await supabase
+    // Get document count
+    const { count, error: countError } = await supabase
       .from("user_documents")
-      .select("id", { count: "exact" })
-      .eq("user_id", userId)
-      .gte("created_at", cycleStart.toISOString())
-      .lt("created_at", cycleEnd.toISOString());
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId);
+
+    if (countError) throw countError;
 
     const FREE_TIER_LIMIT = 3;
+    const isWithinLimit = count < FREE_TIER_LIMIT;
 
     return {
-      allowed: count < FREE_TIER_LIMIT,
-      currentCount: count,
+      allowed: isWithinLimit,
+      current: count,
       limit: FREE_TIER_LIMIT,
-      cycleEnd: cycleEnd.toISOString(),
-      isPaid: false,
+      remaining: Math.max(0, FREE_TIER_LIMIT - count),
     };
   } catch (error) {
     console.error("Error checking document limit:", error);

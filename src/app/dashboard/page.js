@@ -330,41 +330,53 @@ export default function DashboardPage() {
 
         console.log("Current user ID:", session.user.id);
 
-        // Simplified registration check - just check if any registration exists
-        const { data: registration, error: regError } = await supabase
+        // Get all registrations for the user, ordered by creation date
+        const { data: registrations, error: regError } = await supabase
           .from("registrations")
-          .select("id")
+          .select("id, status, created_at")
           .eq("user_id", session.user.id)
-          .maybeSingle();
+          .order("created_at", { ascending: false });
 
-        console.log("Registration data:", registration);
-        console.log("Registration error:", regError);
+        console.log("Registrations:", registrations);
 
-        if (!registration) {
-          console.log("No registration found, redirecting to complete-signup");
+        if (regError) {
+          console.error("Registration error:", regError);
+          return;
+        }
+
+        // If no registrations exist at all, redirect to complete-signup
+        if (!registrations || registrations.length === 0) {
+          console.log("No registrations found, redirecting to complete-signup");
           router.push("/complete-signup");
           return;
         }
 
-        console.log("Registration found, continuing with dashboard");
+        // Use the most recent registration
+        const latestRegistration = registrations[0];
+        console.log("Using latest registration:", latestRegistration);
 
-        // Check subscription status - removed plan from select
+        // Check subscription status using the latest registration
         const { data: subscription } = await supabase
           .from("subscriptions")
           .select("status")
-          .eq("registration_id", registration.id)
+          .eq("registration_id", latestRegistration.id)
           .maybeSingle();
 
-        // Set subscription status for limit checking - removed plan check
+        // Set subscription status for limit checking
         const hasActiveSubscription = subscription?.status === "active";
 
-        // Only fetch limit data if no active subscription
-        if (!hasActiveSubscription) {
-          const limitData = await checkDocumentLimit(session.user.id);
-          setLimitData(limitData);
-          if (!limitData.allowed) {
-            setShowUpgrade(true);
+        try {
+          // Only fetch limit data if no active subscription
+          if (!hasActiveSubscription) {
+            const limitData = await checkDocumentLimit(session.user.id);
+            setLimitData(limitData);
+            if (!limitData.allowed) {
+              setShowUpgrade(true);
+            }
           }
+        } catch (limitError) {
+          console.error("Error checking limits:", limitError);
+          // Continue loading dashboard even if limit check fails
         }
 
         // Fetch documents
@@ -641,6 +653,12 @@ export default function DashboardPage() {
     }
   };
 
+  useEffect(() => {
+    if (limitData) {
+      console.log("limitData updated:", limitData);
+    }
+  }, [limitData]); // Only run when limitData changes
+
   if (!isInitialized) {
     return (
       <div className="container mx-auto p-6 flex items-center justify-center min-h-screen">
@@ -693,7 +711,6 @@ export default function DashboardPage() {
                 onClick={async () => {
                   setIsLoadingBilling(true);
                   try {
-                    // First get current user session
                     const {
                       data: { session },
                     } = await supabase.auth.getSession();
@@ -710,10 +727,14 @@ export default function DashboardPage() {
                         .from("registrations")
                         .select("id, stripe_customer_id")
                         .eq("user_id", session.user.id)
-                        .single();
+                        .maybeSingle();
 
-                    if (regError) {
-                      console.error("Registration error:", regError);
+                    // Handle case where no registration exists
+                    if (!registration || regError) {
+                      console.log(
+                        "No registration found or error occurred:",
+                        regError
+                      );
                       router.push("/pricing");
                       return;
                     }
@@ -724,9 +745,9 @@ export default function DashboardPage() {
                         .from("subscriptions")
                         .select("status, stripe_subscription_id")
                         .eq("registration_id", registration.id)
-                        .single();
+                        .maybeSingle();
 
-                    console.log("Subscription data:", subscription); // Debug log
+                    console.log("Subscription data:", subscription);
 
                     // If subscribed with Stripe subscription, open customer portal
                     if (
@@ -1094,10 +1115,10 @@ export default function DashboardPage() {
           formatRelativeTime={formatRelativeTime}
         />
 
-        {limitData && !limitData.isPaid && (
+        {limitData && limitData.current !== undefined && (
           <div className="text-sm text-muted-foreground mb-2">
-            You have used {limitData.currentCount} out of {limitData.limit}{" "}
-            documents this month.{" "}
+            You have used {limitData.current} out of {limitData.limit} documents
+            this month.{" "}
             <Link href="/pricing" className="text-primary hover:underline">
               Upgrade to get unlimited documents
             </Link>
