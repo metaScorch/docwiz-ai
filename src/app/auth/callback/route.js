@@ -1,27 +1,40 @@
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 
 export async function GET(request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
-  const next = requestUrl.searchParams.get("next") || "/dashboard";
 
-  if (code) {
-    const supabase = createRouteHandlerClient({ cookies });
-    await supabase.auth.exchangeCodeForSession(code);
-
-    // After exchanging the code, check if this was an email verification
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (session?.user?.email_confirmed_at) {
-      // If email is verified, redirect to dashboard
-      return NextResponse.redirect(new URL("/dashboard", request.url));
-    }
+  if (!code) {
+    // If no code, just go to sign in
+    return NextResponse.redirect(new URL("/sign-in", request.url));
   }
 
-  // For other auth callbacks, redirect to the next URL
-  return NextResponse.redirect(new URL(next, request.url));
+  const supabase = createRouteHandlerClient({ cookies });
+
+  // Exchange the code from the query params for a session
+  const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+  if (error) {
+    console.error("Auth callback error:", error);
+    return NextResponse.redirect(new URL("/sign-in", request.url));
+  }
+
+  // Now we have a session, check if email is confirmed
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // If the user’s email is confirmed, go to dashboard
+  if (user?.email_confirmed_at) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  } else {
+    // If not verified, go to verify page
+    return NextResponse.redirect(
+      new URL(
+        `/verify-email?email=${encodeURIComponent(user?.email)}`,
+        request.url
+      )
+    );
+  }
 }

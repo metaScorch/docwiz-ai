@@ -1,193 +1,118 @@
 "use client";
 
+import { useSearchParams, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, Suspense } from "react";
-import { Mail } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { toast } from "sonner";
 
-// Create a separate component for the verification content
-function VerificationContent() {
+export default function VerifyEmailPage() {
+  const supabase = createClientComponentClient();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const supabase = createClientComponentClient();
-  const [countdown, setCountdown] = useState(60);
-  const [resendCooldown, setResendCooldown] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [userEmail, setUserEmail] = useState(null);
-  const [isVerifying, setIsVerifying] = useState(true);
+
+  // We'll read ?email= from the URL
+  const [email, setEmail] = useState("");
+  const [isVerified, setIsVerified] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [message, setMessage] = useState("");
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCountdown((prev) => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
+    const queryEmail = searchParams.get("email") || "";
+    setEmail(queryEmail);
 
-    const cooldownTimer = setInterval(() => {
-      setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
+    checkIfVerified();
+  }, []);
 
-    const checkEmailVerification = async () => {
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-
-        // Only proceed with verification check if we have a session
-        if (session) {
-          const {
-            data: { user },
-            error,
-          } = await supabase.auth.getUser();
-
-          if (error) throw error;
-
-          if (user?.email_confirmed_at) {
-            await supabase.auth.refreshSession();
-            router.push("/dashboard");
-          }
-        }
-      } catch (error) {
-        console.error("Error checking verification:", error);
-        toast.error("Failed to verify email status");
-      }
-    };
-
-    // Check every 3 seconds
-    const verificationChecker = setInterval(checkEmailVerification, 3000);
-
-    // Check for valid session on mount
-    const checkSession = async () => {
-      try {
-        setIsVerifying(true);
-        const {
-          data: { session },
-          error,
-        } = await supabase.auth.getSession();
-
-        if (error) throw error;
-
-        // If no session, check for email in URL params
-        if (!session) {
-          const emailFromUrl = searchParams.get("email");
-          if (emailFromUrl) {
-            setUserEmail(emailFromUrl);
-            return;
-          }
-          router.push("/sign-in");
-          return;
-        }
-
-        // Store the email for display and verification
-        setUserEmail(session.user.email);
-
-        // If already verified, redirect to dashboard
-        if (session.user.email_confirmed_at) {
-          router.push("/dashboard");
-          return;
-        }
-      } catch (error) {
-        console.error("Session check error:", error);
-        toast.error("Unable to verify session");
-        router.push("/sign-in");
-      } finally {
-        setIsVerifying(false);
-      }
-    };
-
-    checkSession();
-
-    return () => {
-      clearInterval(timer);
-      clearInterval(cooldownTimer);
-      clearInterval(verificationChecker);
-    };
-  }, [router, supabase.auth, searchParams]);
-
-  const handleResendEmail = async () => {
+  async function checkIfVerified() {
     try {
-      setLoading(true);
-      const { error } = await supabase.auth.resend({
-        type: "signup",
-        email: userEmail,
-      });
+      const { data, error } = await supabase.auth.getUser();
+      if (error) {
+        // If there's an error, user might be signed out or something else
+        setIsLoading(false);
+        setMessage(error.message);
+        return;
+      }
 
+      // If user’s email is confirmed, then skip to dashboard
+      if (data?.user?.email_confirmed_at) {
+        setIsVerified(true);
+        router.push("/dashboard");
+        return;
+      }
+    } catch (err) {
+      setMessage(err.message);
+    }
+    setIsLoading(false);
+  }
+
+  // Resend the confirmation email
+  async function handleResendEmail() {
+    if (!email) return;
+    setResendLoading(true);
+    setMessage("");
+    try {
+      // Supabase does not have a direct "resend" in v2, so we can signUp again
+      // or use `auth.resend()` from next versions if available. We'll do signUp:
+      const { error } = await supabase.auth.signUp({
+        email: email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
       if (error) throw error;
 
-      // Set cooldown to 60 seconds
-      setResendCooldown(60);
-      toast.success("Verification email resent successfully!");
-    } catch (error) {
-      console.error("Error resending verification email:", error);
-      toast.error(error.message || "Failed to resend verification email");
+      setMessage("Verification email resent. Check your inbox/spam!");
+    } catch (err) {
+      setMessage(err.message);
     } finally {
-      setLoading(false);
+      setResendLoading(false);
     }
-  };
+  }
+
+  if (isLoading) {
+    return (
+      <div style={{ maxWidth: 400, margin: "80px auto", padding: 16 }}>
+        <h1>Verifying...</h1>
+        <p>Please wait while we check your verification status.</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-r from-blue-100 to-purple-100 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-2xl font-bold text-center">
-            Verify Your Email
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {userEmail && (
-            <p className="text-center text-gray-600">
-              We&apos;ve sent a verification email to{" "}
-              <span className="font-medium">{userEmail}</span>
-            </p>
-          )}
-          <p className="text-center text-sm text-gray-500">
-            You'll be automatically redirected once your email is verified.
+    <div style={{ maxWidth: 400, margin: "80px auto", padding: 16 }}>
+      <h1>Verify Your Email</h1>
+      {isVerified ? (
+        <p>You are verified. Redirecting...</p>
+      ) : (
+        <>
+          <p>
+            We’ve sent a verification link to: <strong>{email}</strong>
           </p>
-          {countdown > 0 && (
-            <p className="text-center text-sm text-gray-500">
-              Checking for verification... ({countdown}s)
-            </p>
-          )}
-
-          <div className="flex justify-center">
-            <Button
-              variant="outline"
-              onClick={handleResendEmail}
-              disabled={resendCooldown > 0 || loading}
-              className="gap-2"
-            >
-              <Mail className="h-4 w-4" />
-              {loading
-                ? "Sending..."
-                : resendCooldown > 0
-                  ? `Resend in ${resendCooldown}s`
-                  : "Resend verification email"}
-            </Button>
-          </div>
-
-          <p className="text-center text-sm text-gray-500">
-            Don't see the email? Check your spam folder.
+          <p>
+            Please click that link to confirm your email. Once confirmed, you’ll
+            be automatically logged in.
           </p>
-        </CardContent>
-      </Card>
+          {message && (
+            <div style={{ backgroundColor: "#eef", marginTop: 8, padding: 8 }}>
+              {message}
+            </div>
+          )}
+          <button
+            onClick={handleResendEmail}
+            disabled={resendLoading}
+            style={{ marginTop: 16 }}
+          >
+            {resendLoading ? "Resending..." : "Resend Verification Email"}
+          </button>
+
+          <button
+            onClick={() => router.push("/dashboard")}
+            style={{ marginLeft: 8, marginTop: 16 }}
+          >
+            Go to Dashboard (if verified)
+          </button>
+        </>
+      )}
     </div>
-  );
-}
-
-// Main component with Suspense wrapper
-export default function VerifyEmail() {
-  return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen bg-gradient-to-r from-blue-100 to-purple-100 flex items-center justify-center">
-          <Card className="w-full max-w-md p-6">
-            <div className="text-center">Loading...</div>
-          </Card>
-        </div>
-      }
-    >
-      <VerificationContent />
-    </Suspense>
   );
 }
