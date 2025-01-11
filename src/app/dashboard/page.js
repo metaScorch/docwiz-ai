@@ -808,7 +808,7 @@ export default function DashboardPage() {
                 Generate Agreement Using AI
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="sm:max-w-[450px]">
               <DialogHeader>
                 <DialogTitle>Create New Agreement</DialogTitle>
               </DialogHeader>

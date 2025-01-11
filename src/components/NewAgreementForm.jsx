@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useRouter } from "next/navigation";
-import { Wand2, Check, Loader2, AlertCircle } from "lucide-react"; // Import the magic wand icon
+import { Wand2, Check, Loader2, AlertCircle, Info } from "lucide-react"; // Import the magic wand icon
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { Select } from "@/components/ui/select";
 import { JurisdictionSearch } from "@/components/JurisdictionSearch";
@@ -13,6 +13,22 @@ import { checkDocumentLimit } from "@/utils/usageLimits";
 import { toast } from "sonner"; // Add Sonner import
 import { Toaster } from "sonner"; // Add Toaster import
 import { posthog } from '@/lib/posthog';
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 
 export function NewAgreementForm() {
   const router = useRouter();
@@ -29,6 +45,9 @@ export function NewAgreementForm() {
   const [rateLimitError, setRateLimitError] = useState(null);
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [limitData, setLimitData] = useState(null);
+  const [useBusinessContext, setUseBusinessContext] = useState(false);
+  const [businessContext, setBusinessContext] = useState(null);
+  const [editableContext, setEditableContext] = useState(null);
 
   const generationSteps = [
     "Understanding the requirement",
@@ -49,7 +68,9 @@ export function NewAgreementForm() {
 
       // Handle registration result
       if (registrationResult.status === 'fulfilled' && registrationResult.value) {
+        console.log('Registration data:', registrationResult.value); // Debug log
         setUserRegistration(registrationResult.value);
+        setBusinessContext(registrationResult.value);
         setJurisdiction(
           registrationResult.value.jurisdiction || 
           `${registrationResult.value.city_name}, ${registrationResult.value.state_name}, ${registrationResult.value.country_name}`
@@ -72,11 +93,12 @@ export function NewAgreementForm() {
       if (user) {
         const { data, error } = await supabase
           .from('registrations')
-          .select('city_name, state_name, country_name, jurisdiction')
+          .select('city_name, state_name, country_name, jurisdiction, entity_name, organization_type, industry, description')
           .eq('user_id', user.id)
           .single();
         
         if (error) throw error;
+        console.log('Fetched registration data:', data); // Debug log
         return data;
       }
     } catch (error) {
@@ -190,7 +212,8 @@ export function NewAgreementForm() {
           userId: user.id,
           jurisdiction,
           complexity,
-          length
+          length,
+          businessContext: useBusinessContext ? (editableContext || businessContext) : null
         }),
       });
 
@@ -332,6 +355,13 @@ export function NewAgreementForm() {
     });
   };
 
+  const handleContextEdit = (field, value) => {
+    setEditableContext(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
   return (
     <>
       <Toaster />
@@ -374,6 +404,106 @@ Example: I need a non-disclosure agreement for a freelance developer who will be
             Tip: Check our templates first to save time - we have many common agreements ready to use.
           </p>
         </div>
+
+        {businessContext && businessContext.entity_name && (
+          <div className="space-y-2">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="useContext"
+                checked={useBusinessContext}
+                onCheckedChange={(checked) => {
+                  setUseBusinessContext(checked);
+                  if (checked && !editableContext) {
+                    setEditableContext(businessContext);
+                  }
+                }}
+              />
+              <label
+                htmlFor="useContext"
+                className="text-sm text-muted-foreground cursor-pointer"
+              >
+                Contextualize for {(editableContext || businessContext).entity_name}
+              </label>
+              <Dialog onOpenChange={(open) => {
+                if (open && !editableContext) {
+                  setEditableContext(businessContext);
+                }
+              }}>
+                <DialogTrigger asChild>
+                  <Info className="h-4 w-4 text-muted-foreground cursor-pointer hover:text-primary" />
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[640px]">
+                  <DialogHeader>
+                    <DialogTitle>Business Context Details</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-3 items-center gap-4">
+                        <label className="font-medium">Entity Name:</label>
+                        <Input
+                          className="col-span-2"
+                          value={editableContext?.entity_name || ''}
+                          onChange={(e) => handleContextEdit('entity_name', e.target.value)}
+                        />
+                      </div>
+                      <div className="grid grid-cols-3 items-center gap-4">
+                        <label className="font-medium">Organization:</label>
+                        <Input
+                          className="col-span-2"
+                          value={editableContext?.organization_type || ''}
+                          onChange={(e) => handleContextEdit('organization_type', e.target.value)}
+                        />
+                      </div>
+                      <div className="grid grid-cols-3 items-center gap-4">
+                        <label className="font-medium">Industry:</label>
+                        <Input
+                          className="col-span-2"
+                          value={editableContext?.industry || ''}
+                          onChange={(e) => handleContextEdit('industry', e.target.value)}
+                        />
+                      </div>
+                      <div className="grid grid-cols-3 items-center gap-4">
+                        <label className="font-medium">Jurisdiction:</label>
+                        <Input
+                          className="col-span-2"
+                          value={editableContext?.jurisdiction || ''}
+                          onChange={(e) => handleContextEdit('jurisdiction', e.target.value)}
+                        />
+                      </div>
+                      <div className="grid grid-cols-3 items-start gap-4">
+                        <label className="font-medium pt-2">Description:</label>
+                        <Textarea
+                          className="col-span-2 min-h-[100px]"
+                          value={editableContext?.description || ''}
+                          onChange={(e) => handleContextEdit('description', e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">
+                        This information will be used to make the agreement more specific to your business context.
+                      </p>
+                      <p className="text-sm text-yellow-600">
+                        Note: Changes made here are temporary and will only apply to this agreement.
+                      </p>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button type="button" onClick={() => setShowContextDialog(false)}>
+                      Done
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+            {useBusinessContext && (
+              <p className="text-sm text-muted-foreground pl-6">
+                Agreement will be tailored to your business profile
+              </p>
+            )}
+          </div>
+        )}
+
         <div className="space-y-2">
           <label className="text-sm text-muted-foreground">
             Jurisdiction <span className="text-red-500">*</span>
