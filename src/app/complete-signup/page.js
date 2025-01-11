@@ -131,6 +131,7 @@ export default function CompleteSignupPage() {
             registrationId={registrationId}
             currentStep={currentStep + 1}
             totalSteps={totalSteps}
+            skipEmailVerification={true}
           />
         );
       default:

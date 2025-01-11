@@ -48,6 +48,7 @@ export default function BusinessEntitySetupStep({
   registrationId,
   currentStep,
   totalSteps,
+  skipEmailVerification = false,
 }) {
   const supabase = createClientComponentClient();
   const router = useRouter();
@@ -243,7 +244,13 @@ export default function BusinessEntitySetupStep({
         .eq("user_id", user.id);
 
       if (error) throw error;
-      router.push("/verify-email");
+
+      // Modified redirect logic based on skipEmailVerification prop
+      if (skipEmailVerification) {
+        router.push("/dashboard");
+      } else {
+        router.push("/verify-email");
+      }
     } catch (error) {
       console.error("Error:", error);
       toast.error("Failed to save details");
