@@ -34,31 +34,8 @@ export default function RegisterPage() {
       } = await supabase.auth.getUser();
 
       if (user) {
-        // If user exists, check for existing registration
-        const { data: registration } = await supabase
-          .from("registrations")
-          .select("id, status, organization_type")
-          .eq("user_id", user.id)
-          .single();
-
-        if (registration) {
-          setRegistrationId(registration.id);
-
-          // Determine which step to show based on registration status
-          if (registration.status === "completed") {
-            if (!user.email_confirmed_at) {
-              router.push("/verify-email");
-            } else {
-              router.push("/dashboard");
-            }
-          } else if (registration.organization_type) {
-            // If org type exists, show business setup
-            setCurrentStep(2);
-          } else {
-            // If no org type, show org type selection
-            setCurrentStep(1);
-          }
-        }
+        // Immediately redirect to verify-email page if user exists
+        router.push("/verify-email");
         setEmail(user.email || "");
       }
     };
@@ -67,9 +44,8 @@ export default function RegisterPage() {
   }, [router, supabase]);
 
   const handleSignupComplete = async (userData) => {
-    setEmail(userData.email);
-    setRegistrationId(userData.registrationId);
-    setCurrentStep(1);
+    // No need to handle email here anymore
+    // The SignupStep component will handle the navigation
   };
 
   const handleOrganizationTypeComplete = () => {
@@ -91,32 +67,7 @@ export default function RegisterPage() {
   };
 
   const renderCurrentStep = () => {
-    switch (currentStep) {
-      case 0:
-        return <SignupStep onNext={handleSignupComplete} />;
-      case 1:
-        return (
-          <OrganizationTypeStep
-            onNext={handleOrganizationTypeComplete}
-            onBack={handleBack}
-            registrationId={registrationId}
-            currentStep={currentStep + 1}
-            totalSteps={totalSteps}
-          />
-        );
-      case 2:
-        return (
-          <BusinessEntitySetupStep
-            onNext={() => {}}
-            onBack={handleBack}
-            registrationId={registrationId}
-            currentStep={currentStep + 1}
-            totalSteps={totalSteps}
-          />
-        );
-      default:
-        return null;
-    }
+    return <SignupStep onNext={handleSignupComplete} />;
   };
 
   return (

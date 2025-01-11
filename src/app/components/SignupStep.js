@@ -10,6 +10,7 @@ import { Info, Loader2, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { CardTitle, CardDescription } from "@/components/ui/card";
+import { useRouter } from "next/navigation";
 
 export default function SignupStep({ onNext }) {
   const supabase = createClientComponentClient();
@@ -22,6 +23,7 @@ export default function SignupStep({ onNext }) {
     password: "",
     fullName: "",
   });
+  const router = useRouter();
 
   const handleGoogleSignUp = async () => {
     try {
@@ -90,26 +92,8 @@ export default function SignupStep({ onNext }) {
       });
       if (error) throw error;
 
-      // Create new registration
-      const { data: regData, error: regError } = await supabase
-        .from("registrations")
-        .insert({
-          user_id: data.user?.id,
-          status: "pending",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .select()
-        .single();
-
-      if (regError) throw regError;
-
-      // Move to next step with registration data
-      onNext({
-        id: data.user?.id,
-        email: formData.email,
-        registrationId: regData.id,
-      });
+      // Directly navigate to verify-email page with email
+      router.push(`/verify-email?email=${encodeURIComponent(formData.email)}`);
     } catch (error) {
       console.error("Error:", error);
       setEmailError(error.message);
