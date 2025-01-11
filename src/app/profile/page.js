@@ -57,9 +57,7 @@ export default function ProfilePage() {
     description: "",
   });
   const [userEmail, setUserEmail] = useState("");
-  const [signatoryType, setSignatoryType] = useState(
-    formData.authorized_signatory === "me" ? "myself" : "someone_else"
-  );
+  const [signatoryType, setSignatoryType] = useState("myself");
 
   useEffect(() => {
     async function loadProfile() {
@@ -93,6 +91,10 @@ export default function ProfilePage() {
           domain: registration.domain || "",
           description: registration.description || "",
         });
+
+        setSignatoryType(
+          registration.authorized_signatory === "me" ? "myself" : "someone_else"
+        );
       } catch (error) {
         console.error("Error loading profile:", error);
         toast.error("Failed to load profile. Please try again.");
