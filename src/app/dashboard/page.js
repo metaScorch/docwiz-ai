@@ -661,6 +661,27 @@ export default function DashboardPage() {
     }
   };
 
+  if (!isInitialized) {
+    return (
+      <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Image
+            src="/logo.png"
+            alt="DocWiz Logo"
+            width={180}
+            height={60}
+            priority
+            className="h-auto mb-4"
+          />
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">
+            Loading your dashboard...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <Toaster />

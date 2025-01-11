@@ -56,6 +56,10 @@ export default function ProfilePage() {
     domain: "",
     description: "",
   });
+  const [userEmail, setUserEmail] = useState("");
+  const [signatoryType, setSignatoryType] = useState(
+    formData.authorized_signatory === "me" ? "myself" : "someone_else"
+  );
 
   useEffect(() => {
     async function loadProfile() {
@@ -67,6 +71,8 @@ export default function ProfilePage() {
           router.push("/sign-in");
           return;
         }
+
+        setUserEmail(user.email);
 
         const { data: registration, error } = await supabase
           .from("registrations")
@@ -232,97 +238,230 @@ export default function ProfilePage() {
           <CardTitle className="text-2xl font-semibold text-primary">
             Profile Settings
           </CardTitle>
+          <p className="text-sm text-muted-foreground">{userEmail}</p>
         </CardHeader>
         <CardContent className="space-y-6 pt-6">
           <div className="grid gap-6">
-            {Object.entries(formData).map(([key, value]) => (
-              <div key={key} className="space-y-2">
-                <Label htmlFor={key} className="text-sm font-medium capitalize">
-                  {key === "registration_type"
-                    ? "Organization Type"
-                    : key.replace("_", " ")}
-                </Label>
-                {editing ? (
-                  key === "jurisdiction" ? (
-                    <JurisdictionSearch
-                      value={value}
-                      onChange={handleJurisdictionChange}
-                      defaultValue={value || undefined}
-                    />
-                  ) : key === "industry" ? (
-                    <div className="flex flex-col gap-2">
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            role="combobox"
-                            className="w-full justify-between max-w-md"
-                          >
-                            {formData.industry || "Select or enter industry..."}
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                          <Command>
-                            <CommandInput
-                              placeholder="Type or select industry..."
-                              value={formData.industry}
-                              onValueChange={(value) =>
-                                setFormData({ ...formData, industry: value })
-                              }
+            {Object.entries(formData).map(([key, value]) => {
+              if (key === "authorized_signatory") {
+                return (
+                  <div key={key} className="space-y-4">
+                    <Label
+                      htmlFor={key}
+                      className="text-sm font-medium capitalize"
+                    >
+                      Authorized Signatory
+                    </Label>
+                    {editing ? (
+                      <div className="space-y-4">
+                        <div className="flex flex-col space-y-2">
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="radio"
+                              id="myself"
+                              name="signatoryType"
+                              value="myself"
+                              checked={signatoryType === "myself"}
+                              onChange={(e) => {
+                                setSignatoryType("myself");
+                                setFormData({
+                                  ...formData,
+                                  authorized_signatory: "me",
+                                  signatory_email: userEmail,
+                                });
+                              }}
+                              className="h-4 w-4 border-gray-300 text-primary focus:ring-primary"
                             />
-                            <CommandEmpty>
-                              Press enter to use this industry
-                            </CommandEmpty>
-                            <CommandGroup>
-                              {industries.map((industry) => (
-                                <CommandItem
-                                  key={industry}
-                                  value={industry}
-                                  onSelect={handleIndustrySelect}
-                                >
-                                  <Check
-                                    className={cn(
-                                      "mr-2 h-4 w-4",
-                                      formData.industry === industry
-                                        ? "opacity-100"
-                                        : "opacity-0"
-                                    )}
-                                  />
-                                  {industry}
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </Command>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                  ) : key === "description" ? (
-                    <textarea
-                      id={key}
-                      value={value}
-                      onChange={(e) =>
-                        setFormData({ ...formData, [key]: e.target.value })
-                      }
-                      className="flex min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 max-w-md"
-                    />
-                  ) : (
-                    <Input
-                      id={key}
-                      value={value}
-                      onChange={(e) =>
-                        setFormData({ ...formData, [key]: e.target.value })
-                      }
-                      className="max-w-md"
-                    />
-                  )
-                ) : (
-                  <div className="text-muted-foreground">
-                    {value || "Not set"}
+                            <Label htmlFor="myself" className="text-sm">
+                              Myself
+                            </Label>
+                          </div>
+
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="radio"
+                              id="someone_else"
+                              name="signatoryType"
+                              value="someone_else"
+                              checked={signatoryType === "someone_else"}
+                              onChange={(e) => {
+                                setSignatoryType("someone_else");
+                                setFormData({
+                                  ...formData,
+                                  authorized_signatory: "",
+                                  signatory_email: "",
+                                });
+                              }}
+                              className="h-4 w-4 border-gray-300 text-primary focus:ring-primary"
+                            />
+                            <Label htmlFor="someone_else" className="text-sm">
+                              Someone else
+                            </Label>
+                          </div>
+                        </div>
+
+                        {signatoryType === "someone_else" && (
+                          <div className="space-y-4 pl-6">
+                            <div className="space-y-2">
+                              <Label
+                                htmlFor="signatory_name"
+                                className="text-sm"
+                              >
+                                Signatory Name
+                              </Label>
+                              <Input
+                                id="signatory_name"
+                                value={
+                                  formData.authorized_signatory === "me"
+                                    ? ""
+                                    : formData.authorized_signatory
+                                }
+                                onChange={(e) =>
+                                  setFormData({
+                                    ...formData,
+                                    authorized_signatory: e.target.value,
+                                  })
+                                }
+                                placeholder="Enter signatory name"
+                                className="max-w-md"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label
+                                htmlFor="signatory_email"
+                                className="text-sm"
+                              >
+                                Signatory Email
+                              </Label>
+                              <Input
+                                id="signatory_email"
+                                type="email"
+                                value={formData.signatory_email}
+                                onChange={(e) =>
+                                  setFormData({
+                                    ...formData,
+                                    signatory_email: e.target.value,
+                                  })
+                                }
+                                placeholder="Enter signatory email"
+                                className="max-w-md"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-muted-foreground">
+                        {value === "me" ? (
+                          <span>Myself ({userEmail})</span>
+                        ) : (
+                          <span>
+                            {value} ({formData.signatory_email})
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            ))}
+                );
+              }
+
+              if (key === "signatory_email") {
+                return null;
+              }
+
+              return (
+                <div key={key} className="space-y-2">
+                  <Label
+                    htmlFor={key}
+                    className="text-sm font-medium capitalize"
+                  >
+                    {key === "registration_type"
+                      ? "Organization Type"
+                      : key.replace("_", " ")}
+                  </Label>
+                  {editing ? (
+                    key === "jurisdiction" ? (
+                      <JurisdictionSearch
+                        value={value}
+                        onChange={handleJurisdictionChange}
+                        defaultValue={value || undefined}
+                      />
+                    ) : key === "industry" ? (
+                      <div className="flex flex-col gap-2">
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              className="w-full justify-between max-w-md"
+                            >
+                              {formData.industry ||
+                                "Select or enter industry..."}
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                            <Command>
+                              <CommandInput
+                                placeholder="Type or select industry..."
+                                value={formData.industry}
+                                onValueChange={(value) =>
+                                  setFormData({ ...formData, industry: value })
+                                }
+                              />
+                              <CommandEmpty>
+                                Press enter to use this industry
+                              </CommandEmpty>
+                              <CommandGroup>
+                                {industries.map((industry) => (
+                                  <CommandItem
+                                    key={industry}
+                                    value={industry}
+                                    onSelect={handleIndustrySelect}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        formData.industry === industry
+                                          ? "opacity-100"
+                                          : "opacity-0"
+                                      )}
+                                    />
+                                    {industry}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    ) : key === "description" ? (
+                      <textarea
+                        id={key}
+                        value={value}
+                        onChange={(e) =>
+                          setFormData({ ...formData, [key]: e.target.value })
+                        }
+                        className="flex min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 max-w-md"
+                      />
+                    ) : (
+                      <Input
+                        id={key}
+                        value={value}
+                        onChange={(e) =>
+                          setFormData({ ...formData, [key]: e.target.value })
+                        }
+                        className="max-w-md"
+                      />
+                    )
+                  ) : (
+                    <div className="text-muted-foreground">
+                      {value || "Not set"}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
           <Separator className="my-6" />
