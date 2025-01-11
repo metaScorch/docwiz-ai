@@ -43,13 +43,9 @@ export default function CompleteSignupPage() {
           const registration = registrations[0];
           setRegistrationId(registration.id);
 
-          // Determine which step to show based on registration status
+          // Modified this section to remove email verification check
           if (registration.status === "completed") {
-            if (!user.email_confirmed_at) {
-              router.push("/verify-email");
-            } else {
-              router.push("/dashboard");
-            }
+            router.push("/dashboard");
           } else if (registration.organization_type) {
             setCurrentStep(1);
           } else {

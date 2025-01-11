@@ -70,6 +70,7 @@ export default function BusinessEntitySetupStep({
   const [countries, setCountries] = useState([]);
   const [states, setStates] = useState([]);
   const [cities, setCities] = useState([]);
+  const [isFetchingBusinessInfo, setIsFetchingBusinessInfo] = useState(false);
 
   useEffect(() => {
     setCountries(Country.getAllCountries());
@@ -106,6 +107,15 @@ export default function BusinessEntitySetupStep({
         .eq("user_id", user.id)
         .single();
 
+      // Extract domain from user's email if no domain is set
+      const businessDomain =
+        registration?.domain || extractBusinessDomain(user.email);
+
+      // If we found a business domain and no existing data was fetched, trigger the API call
+      if (businessDomain && !registration?.domain) {
+        fetchBusinessInfo(businessDomain);
+      }
+
       if (registration) {
         const country = registration.country_code
           ? Country.getCountryByCode(registration.country_code)
@@ -120,7 +130,7 @@ export default function BusinessEntitySetupStep({
             : null;
 
         setFormData({
-          domain: registration.domain || "",
+          domain: businessDomain || "",
           description: registration.description || "",
           industry: registration.industry || "",
           entityName: registration.entity_name || "",
@@ -137,6 +147,56 @@ export default function BusinessEntitySetupStep({
     } catch (error) {
       console.error("Error fetching data:", error);
       toast.error("Failed to load existing details");
+    }
+  };
+
+  const formatTimeRemaining = (seconds) => {
+    if (seconds < 60) return `in ${seconds} seconds`;
+    if (seconds < 3600) return `in ${Math.ceil(seconds / 60)} minutes`;
+    if (seconds < 86400) return `in ${Math.ceil(seconds / 3600)} hours`;
+    return `in ${Math.ceil(seconds / 86400)} days`;
+  };
+
+  const fetchBusinessInfo = async (domain) => {
+    setIsFetchingBusinessInfo(true);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      const response = await fetch("/api/fetch-business-info", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ domain, userId: user?.id }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 429) {
+          toast.error(
+            `Rate limit reached. Please try again ${formatTimeRemaining(data.resetIn)}`
+          );
+        } else {
+          throw new Error(data.error || "Failed to fetch business information");
+        }
+        return;
+      }
+
+      setFormData((prev) => ({
+        ...prev,
+        description: data.description || prev.description,
+        industry: data.industry || prev.industry,
+      }));
+
+      toast.success("Business information updated");
+    } catch (error) {
+      console.error("Error fetching business info:", error);
+      toast.error("Failed to fetch business information");
+    } finally {
+      setIsFetchingBusinessInfo(false);
     }
   };
 
@@ -233,7 +293,19 @@ export default function BusinessEntitySetupStep({
               onChange={(e) =>
                 setFormData({ ...formData, domain: e.target.value })
               }
+              onBlur={(e) => {
+                const domain = e.target.value.trim();
+                if (domain) {
+                  fetchBusinessInfo(domain);
+                }
+              }}
             />
+            {isFetchingBusinessInfo && (
+              <div className="text-sm text-muted-foreground flex items-center gap-2">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Fetching business information...
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">
