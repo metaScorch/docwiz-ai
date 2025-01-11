@@ -223,7 +223,7 @@ export default function SignupStep({ onNext }) {
         <Alert>
           <Info className="h-4 w-4" />
           <AlertDescription>
-            Password must be at least 8 characters long
+            Password must be at least 6 characters long
           </AlertDescription>
         </Alert>
 

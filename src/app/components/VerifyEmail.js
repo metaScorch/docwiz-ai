@@ -127,8 +127,7 @@ export default function VerifyEmail({ initialEmail }) {
               Check your email
             </CardTitle>
             <CardDescription>
-              We sent a verification link to
-              <br />
+              We sent a verification link to{" "}
               <span className="font-medium text-foreground">{email}</span>
             </CardDescription>
           </div>
