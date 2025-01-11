@@ -45,8 +45,8 @@ export default function PricingPage() {
   // Pricing config
   const STRIPE_PRICE_IDS = {
     UNLIMITED: {
-      monthly: "price_1QbiZ4JX4APU5HfwOKJBuBva", // example IDs
-      yearly: "price_1QbiZ4JX4APU5HfwZ4VX4VRb",
+      monthly: process.env.NEXT_PUBLIC_STRIPE_PRICE_ID_UNLIMITED_MONTHLY,
+      yearly: process.env.NEXT_PUBLIC_STRIPE_PRICE_ID_UNLIMITED_YEARLY,
     },
   };
 
