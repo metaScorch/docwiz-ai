@@ -29,21 +29,19 @@ export default function CompleteSignupPage() {
           return;
         }
 
-        // First check for ANY existing registration for this user
-        const { data: registrations, error: fetchError } = await supabase
+        // First check for existing registration for this user
+        const { data: registration, error: fetchError } = await supabase
           .from("registrations")
           .select("id, status, organization_type")
           .eq("user_id", user.id)
-          .order("created_at", { ascending: false })
-          .limit(1);
+          .maybeSingle();
 
         if (fetchError) throw fetchError;
 
-        if (registrations && registrations.length > 0) {
-          const registration = registrations[0];
+        if (registration) {
+          // Existing registration found
           setRegistrationId(registration.id);
 
-          // Modified this section to remove email verification check
           if (registration.status === "completed") {
             router.push("/dashboard");
           } else if (registration.organization_type) {
@@ -51,35 +49,22 @@ export default function CompleteSignupPage() {
           } else {
             setCurrentStep(0);
           }
-
-          // If there are multiple registrations for this user, clean up duplicates
-          if (registrations.length > 1) {
-            const keepId = registration.id;
-            const { error: cleanupError } = await supabase
-              .from("registrations")
-              .delete()
-              .eq("user_id", user.id)
-              .neq("id", keepId);
-
-            if (cleanupError) {
-              console.error(
-                "Error cleaning up duplicate registrations:",
-                cleanupError
-              );
-            }
-          }
         } else {
           // No registration exists, create one
           const { data: newReg, error: insertError } = await supabase
             .from("registrations")
-            .insert([
+            .upsert(
               {
                 user_id: user.id,
                 status: "pending",
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
               },
-            ])
+              {
+                onConflict: "user_id",
+                ignoreDuplicates: false,
+              }
+            )
             .select()
             .single();
 
