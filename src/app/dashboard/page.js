@@ -32,7 +32,14 @@ import {
   isThisYear,
 } from "date-fns";
 import Image from "next/image";
-import { Wand2, UserCircle, CreditCard, LogOut, Loader2 } from "lucide-react";
+import {
+  Wand2,
+  UserCircle,
+  CreditCard,
+  LogOut,
+  Loader2,
+  FileText,
+} from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   DropdownMenu,
@@ -47,6 +54,7 @@ import Link from "next/link";
 import { posthog } from "@/lib/posthog";
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import PDFUpload from "@/components/PDFUpload";
 
 // Status filter definitions
 const STATUS_FILTERS = [
@@ -266,7 +274,15 @@ const SignedDocumentsDialog = ({
 // Component that uses search params
 function SearchParamsHandler() {
   const searchParams = useSearchParams();
-  // Handle any search params logic here
+  const router = useRouter();
+
+  useEffect(() => {
+    // Handle any search params logic here
+    if (searchParams.get("redirect") === "dashboard") {
+      router.push("/dashboard");
+    }
+  }, [searchParams, router]);
+
   return null;
 }
 
@@ -813,6 +829,34 @@ export default function DashboardPage() {
                 <DialogTitle>Create New Agreement</DialogTitle>
               </DialogHeader>
               <NewAgreementForm />
+            </DialogContent>
+          </Dialog>
+
+          <div className="text-muted-foreground">or</div>
+
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button
+                variant="outline"
+                className="bg-white text-[#0700c7] border-[#0700c7] hover:bg-[#0700c7]/10"
+              >
+                <FileText className="mr-1 h-4 w-4" />
+                Upload PDF for Analysis
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[450px]">
+              <DialogHeader>
+                <DialogTitle>Upload PDF for Analysis</DialogTitle>
+              </DialogHeader>
+              <PDFUpload
+                onUploadComplete={(documentId) => {
+                  toast.success("PDF uploaded successfully!");
+                  router.push(`/analyze/${documentId}`);
+                }}
+                onError={(error) => {
+                  toast.error(error.message || "Failed to upload PDF");
+                }}
+              />
             </DialogContent>
           </Dialog>
 
