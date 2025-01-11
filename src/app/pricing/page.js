@@ -26,72 +26,7 @@ import { loadStripe } from "@stripe/stripe-js";
 import { Loader2 } from "lucide-react";
 import { posthog } from "@/lib/posthog";
 
-const STRIPE_PRICE_IDS = {
-  UNLIMITED: {
-    monthly: "price_1QbiZ4JX4APU5HfwOKJBuBva",
-    yearly: "price_1QbiZ4JX4APU5HfwZ4VX4VRb",
-  },
-};
-
-const pricingPlans = [
-  {
-    name: "STARTER",
-    href: "#",
-    price: "$0",
-    period: "month",
-    yearlyPrice: "$0",
-    features: [
-      "3 Documents per Month",
-      "3 AI Amendments per Document",
-      "1 AutoFormat AI per Document",
-      "3 AI Questions per Document",
-      "Basic Templates",
-    ],
-    description: "Perfect for individuals trying out the platform",
-    buttonText: "Current Plan",
-    isPopular: false,
-  },
-  {
-    name: "UNLIMITED",
-    href: "#",
-    price: "$19.99",
-    period: "month",
-    yearlyPrice: "$150",
-    priceId: STRIPE_PRICE_IDS.UNLIMITED,
-    features: [
-      "Unlimited Documents",
-      "Unlimited AI Amendments and Clause Editor",
-      "Unlimited AutoFormat AI",
-      "Unlimited AI Questions (Coming Soon)",
-      "Premium Templates",
-      "Collaboration Tools (Coming Soon)",
-    ],
-    description: "Ideal for professionals and businesses",
-    buttonText: "Subscribe",
-    isPopular: true,
-  },
-  {
-    name: "ENTERPRISE",
-    href: "#",
-    price: "Let's Talk",
-    period: "",
-    yearlyPrice: "Let's Talk",
-    features: [
-      "Everything in Unlimited",
-      "Advanced Collaboration Tools",
-      "Custom API Integrations",
-      "Enhanced Security & Compliance",
-      "Dedicated Account Manager",
-      "24/7 Priority Support",
-      "Enterprise Analytics",
-      "White Labeling Options",
-    ],
-    description: "For large organizations with complex workflows",
-    buttonText: "Contact Sales",
-    isPopular: false,
-  },
-];
-
+// Marking entire page as a Client Component to avoid SSR
 export default function PricingPage() {
   const [isMonthly, setIsMonthly] = useState(true);
   const { isDesktop } = useWindowSize();
@@ -105,9 +40,75 @@ export default function PricingPage() {
       referrer: document.referrer,
       is_authenticated: !!supabase.auth.user,
     });
-  }, []);
+  }, [supabase.auth.user]);
 
-  // Track billing period toggle
+  // Pricing config
+  const STRIPE_PRICE_IDS = {
+    UNLIMITED: {
+      monthly: "price_1QbiZ4JX4APU5HfwOKJBuBva", // example IDs
+      yearly: "price_1QbiZ4JX4APU5HfwZ4VX4VRb",
+    },
+  };
+
+  const pricingPlans = [
+    {
+      name: "STARTER",
+      href: "#",
+      price: "$0",
+      period: "month",
+      yearlyPrice: "$0",
+      features: [
+        "3 Documents per Month",
+        "3 AI Amendments per Document",
+        "1 AutoFormat AI per Document",
+        "3 AI Questions per Document",
+        "Basic Templates",
+      ],
+      description: "Perfect for individuals trying out the platform",
+      buttonText: "Current Plan",
+      isPopular: false,
+    },
+    {
+      name: "UNLIMITED",
+      href: "#",
+      price: "$19.99",
+      period: "month",
+      yearlyPrice: "$150", // effectively $12.5/month
+      priceId: STRIPE_PRICE_IDS.UNLIMITED,
+      features: [
+        "Unlimited Documents",
+        "Unlimited AI Amendments and Clause Editor",
+        "Unlimited AutoFormat AI",
+        "Unlimited AI Questions (Coming Soon)",
+        "Premium Templates",
+        "Collaboration Tools (Coming Soon)",
+      ],
+      description: "Ideal for professionals and businesses",
+      buttonText: "Subscribe",
+      isPopular: true,
+    },
+    {
+      name: "ENTERPRISE",
+      href: "#",
+      price: "Let's Talk",
+      period: "",
+      yearlyPrice: "Let's Talk",
+      features: [
+        "Everything in Unlimited",
+        "Advanced Collaboration Tools",
+        "Custom API Integrations",
+        "Enhanced Security & Compliance",
+        "Dedicated Account Manager",
+        "24/7 Priority Support",
+        "Enterprise Analytics",
+        "White Labeling Options",
+      ],
+      description: "For large organizations with complex workflows",
+      buttonText: "Contact Sales",
+      isPopular: false,
+    },
+  ];
+
   const handleToggle = () => {
     setIsMonthly(!isMonthly);
     posthog.capture("pricing_period_changed", {
@@ -116,6 +117,16 @@ export default function PricingPage() {
   };
 
   const handleSubscription = async (plan) => {
+    // If user clicked the Enterprise plan “Contact Sales”
+    if (plan.name === "ENTERPRISE") {
+      posthog.capture("enterprise_contact_clicked");
+      window.open("https://tally.so/r/wgYL9K", "_blank");
+      return;
+    }
+
+    // Only do the subscription flow for the UNLIMITED plan
+    if (plan.name !== "UNLIMITED") return;
+
     // Track subscription attempt
     posthog.capture("subscription_started", {
       plan_name: plan.name,
@@ -123,28 +134,19 @@ export default function PricingPage() {
       price: isMonthly ? plan.price : plan.yearlyPrice,
     });
 
-    if (plan.name === "ENTERPRISE") {
-      posthog.capture("enterprise_contact_clicked");
-      window.open("https://tally.so/r/wgYL9K", "_blank");
-      return;
-    }
-
-    if (plan.name !== "UNLIMITED") return;
-
     try {
       setIsLoading(true);
-      console.log("1. Starting subscription process...");
 
       const {
         data: { session },
       } = await supabase.auth.getSession();
       if (!session) {
-        console.log("No session found, redirecting to sign-in");
+        // No user session => go sign in
         router.push("/sign-in");
         return;
       }
-      console.log("2. User is authenticated");
 
+      // Fetch user’s registration
       const { data: registration, error: registrationError } = await supabase
         .from("registrations")
         .select("stripe_customer_id")
@@ -153,16 +155,13 @@ export default function PricingPage() {
 
       let stripeCustomerId = registration?.stripe_customer_id;
 
-      // Create Stripe customer if it doesn't exist
+      // If no stripe_customer_id, create a new one
       if (!stripeCustomerId) {
-        console.log("3. No Stripe customer found, creating new customer");
         const createCustomerResponse = await fetch(
           "/api/create-stripe-customer",
           {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               email: session.user.email,
               userId: session.user.id,
@@ -190,11 +189,7 @@ export default function PricingPage() {
         }
       }
 
-      console.log(
-        "4. Creating checkout session with price:",
-        isMonthly ? plan.priceId.monthly : plan.priceId.yearly
-      );
-
+      // Create checkout session
       const response = await fetch("/api/create-checkout-session", {
         method: "POST",
         headers: {
@@ -212,25 +207,17 @@ export default function PricingPage() {
       }
 
       const { sessionId } = await response.json();
-      console.log("5. Got session ID:", sessionId);
 
+      // Redirect to Stripe checkout
       const stripe = await loadStripe(
         process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
       );
-      if (!stripe) {
-        throw new Error("Stripe failed to initialize");
-      }
-      console.log("6. Stripe loaded, redirecting to checkout...");
+      if (!stripe) throw new Error("Stripe failed to initialize");
 
-      const result = await stripe.redirectToCheckout({
-        sessionId: sessionId,
-      });
+      const result = await stripe.redirectToCheckout({ sessionId });
+      if (result.error) throw new Error(result.error.message);
 
-      if (result.error) {
-        throw new Error(result.error.message);
-      }
-
-      // Track successful redirect to checkout
+      // Successful redirect
       posthog.capture("checkout_redirect_success", {
         session_id: sessionId,
         plan_name: plan.name,
@@ -250,6 +237,7 @@ export default function PricingPage() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
+      {/* Logo + My Account Menu */}
       <div className="flex justify-between items-center mb-8">
         <Link href="/dashboard">
           <Image
@@ -289,7 +277,9 @@ export default function PricingPage() {
         </DropdownMenu>
       </div>
 
+      {/* Section Title */}
       <Section title="Pricing" subtitle="Choose the plan that's right for you">
+        {/* Toggle Monthly/Yearly */}
         <div className="flex justify-center mb-10">
           <span className="mr-2 font-semibold">Monthly</span>
           <label className="relative inline-flex items-center cursor-pointer">
@@ -299,6 +289,8 @@ export default function PricingPage() {
           </label>
           <span className="ml-2 font-semibold">Yearly</span>
         </div>
+
+        {/* Pricing Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {pricingPlans.map((plan, index) => (
             <motion.div
@@ -365,15 +357,15 @@ export default function PricingPage() {
                   )}
                 </p>
 
-                <p className="text-xs leading-5 text-muted-foreground">
-                  {plan.price !== "Let's Talk" &&
-                    plan.name !== "STARTER" &&
-                    (isMonthly
+                {plan.price !== "Let's Talk" && plan.name !== "STARTER" && (
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    {isMonthly
                       ? "billed monthly"
                       : plan.name === "UNLIMITED"
                         ? "billed annually (effective $12.5/month, save 37%)"
-                        : "billed annually")}
-                </p>
+                        : "billed annually"}
+                  </p>
+                )}
 
                 <ul className="mt-5 gap-2 flex flex-col">
                   {plan.features.map((feature, idx) => (
@@ -390,9 +382,7 @@ export default function PricingPage() {
                   onClick={() => handleSubscription(plan)}
                   disabled={isLoading}
                   className={cn(
-                    buttonVariants({
-                      variant: "outline",
-                    }),
+                    buttonVariants({ variant: "outline" }),
                     "w-full relative",
                     plan.isPopular
                       ? "bg-primary text-primary-foreground hover:bg-primary/90"
