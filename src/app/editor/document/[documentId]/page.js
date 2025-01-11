@@ -10,6 +10,8 @@ import { use } from "react";
 import LoadingModal from "@/components/LoadingModal";
 import { redirect } from "next/navigation";
 import { UpgradeModal } from "@/components/UpgradeModal";
+import { Loader2 } from "lucide-react";
+import Image from "next/image";
 
 export default function EditorPage({ params }) {
   const resolvedParams = use(params);
@@ -20,6 +22,7 @@ export default function EditorPage({ params }) {
   const [userDocument, setUserDocument] = useState(null);
   const [content, setContent] = useState("");
   const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [, setForceUpdate] = useState(0);
   const [isFormatting, setIsFormatting] = useState(false);
   const [featureCounts, setFeatureCounts] = useState({
@@ -43,6 +46,27 @@ export default function EditorPage({ params }) {
 
         if (!session?.user) {
           console.log("No session found");
+          return;
+        }
+
+        // First check document status
+        const { data: userDoc, error: userDocError } = await supabase
+          .from("user_documents")
+          .select("*")
+          .eq("id", documentId)
+          .single();
+
+        if (userDocError) {
+          console.error("Document error:", userDocError);
+          return;
+        }
+
+        // Redirect if status is pending_signature or completed
+        if (
+          userDoc.status === "pending_signature" ||
+          userDoc.status === "completed"
+        ) {
+          router.push(`/editor/document/${documentId}/tracking`);
           return;
         }
 
@@ -101,13 +125,15 @@ export default function EditorPage({ params }) {
             });
           }
         }
+        setIsLoading(false);
       } catch (error) {
         console.error("Error in fetchDocumentAndSubscription:", error);
+        setIsLoading(false);
       }
     }
 
     fetchDocumentAndSubscription();
-  }, [documentId, supabase, hasActiveSubscription]);
+  }, [documentId, supabase, router]);
 
   useEffect(() => {
     const intervalId = setInterval(() => {
@@ -247,10 +273,28 @@ export default function EditorPage({ params }) {
     setIsFormatting(false);
   };
 
-  if (!userDocument) {
-    return <div>Loading...</div>;
+  if (isLoading) {
+    return (
+      <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Image
+            src="/logo.png"
+            alt="DocWiz Logo"
+            width={180}
+            height={60}
+            priority
+            className="h-auto mb-4"
+          />
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">
+            Loading your document...
+          </p>
+        </div>
+      </div>
+    );
   }
 
+  // Only render the Editor if we have a document and it's in an editable state
   return (
     <div className="container mx-auto p-6">
       <div className="flex flex-col mb-6">
