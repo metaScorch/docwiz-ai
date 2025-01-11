@@ -59,7 +59,6 @@ export function NewAgreementForm() {
   ];
 
   useEffect(() => {
-    // Fetch user registration and limit data in parallel
     const initializeForm = async () => {
       const [registrationResult, limitResult] = await Promise.allSettled([
         fetchUserRegistration(),
@@ -67,14 +66,24 @@ export function NewAgreementForm() {
       ]);
 
       // Handle registration result
-      if (registrationResult.status === 'fulfilled' && registrationResult.value) {
-        console.log('Registration data:', registrationResult.value); // Debug log
-        setUserRegistration(registrationResult.value);
-        setBusinessContext(registrationResult.value);
-        setJurisdiction(
-          registrationResult.value.jurisdiction || 
-          `${registrationResult.value.city_name}, ${registrationResult.value.state_name}, ${registrationResult.value.country_name}`
-        );
+      if (registrationResult.status === 'fulfilled') {
+        const regData = registrationResult.value;
+        console.log('Registration data:', regData);
+        
+        setUserRegistration(regData);
+        
+        // Set jurisdiction if it exists
+        if (regData?.jurisdiction) {
+          setJurisdiction(regData.jurisdiction);
+        }
+        
+        // Only set business context if required fields are present
+        if (regData && 
+            regData.entity_name && 
+            regData.organization_type && 
+            regData.industry) {
+          setBusinessContext(regData);
+        }
       }
 
       // Handle limit result
@@ -405,7 +414,7 @@ Example: I need a non-disclosure agreement for a freelance developer who will be
           </p>
         </div>
 
-        {businessContext && businessContext.entity_name && (
+        {businessContext && businessContext.entity_name ? (
           <div className="space-y-2">
             <div className="flex items-center space-x-2">
               <Checkbox
@@ -502,7 +511,26 @@ Example: I need a non-disclosure agreement for a freelance developer who will be
               </p>
             )}
           </div>
-        )}
+        ) : userRegistration ? (
+          <div className="rounded-md bg-muted p-4">
+            <div className="flex items-start">
+              <Info className="h-5 w-5 text-muted-foreground mt-0.5" />
+              <div className="ml-3">
+                <h3 className="text-sm font-medium">Missing Context. Enhance Your Agreement!</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Enable smart customization by adding your business details. We'll automatically tailor agreements to your business profile.
+                </p>
+                <Button
+                  variant="link"
+                  className="px-0 text-primary font-medium h-auto mt-2"
+                  onClick={() => router.push('/profile')}
+                >
+                  Complete Business Profile →
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         <div className="space-y-2">
           <label className="text-sm text-muted-foreground">
@@ -511,10 +539,10 @@ Example: I need a non-disclosure agreement for a freelance developer who will be
           <JurisdictionSearch
             value={jurisdiction}
             onChange={handleJurisdictionChange}
-            defaultValue={userRegistration ? 
-              (userRegistration.jurisdiction || 
-              `${userRegistration.city_name}, ${userRegistration.state_name}, ${userRegistration.country_name}`) : 
-              "Select jurisdiction"
+            defaultValue={userRegistration?.jurisdiction || 
+              (userRegistration?.city_name && userRegistration?.state_name && userRegistration?.country_name ?
+                `${userRegistration.city_name}, ${userRegistration.state_name}, ${userRegistration.country_name}` :
+                "Select jurisdiction")
             }
           />
           {jurisdictionError && (
