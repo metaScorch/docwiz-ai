@@ -17,9 +17,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Country, State, City } from "country-state-city";
 import { extractBusinessDomain } from "@/utils/emailUtils";
 import { Separator } from "@/components/ui/separator";
+import { JurisdictionSearch } from "@/components/JurisdictionSearch";
 
 const industries = [
   "Technology",
@@ -61,38 +61,21 @@ export default function BusinessEntitySetupStep({
     // Entity Details
     entityName: "",
     registrationType: "",
-    country: null,
-    state: null,
-    city: null,
+    jurisdiction: "",
+    city_name: "",
+    state_name: "",
+    state_code: "",
+    country_name: "",
+    country_code: "",
     authorizedSignatory: "me",
     signatoryEmail: "",
   });
 
-  const [countries, setCountries] = useState([]);
-  const [states, setStates] = useState([]);
-  const [cities, setCities] = useState([]);
   const [isFetchingBusinessInfo, setIsFetchingBusinessInfo] = useState(false);
 
   useEffect(() => {
-    setCountries(Country.getAllCountries());
     fetchExistingData();
   }, []);
-
-  useEffect(() => {
-    if (formData.country) {
-      setStates(State.getStatesOfCountry(formData.country.isoCode));
-      setFormData((prev) => ({ ...prev, state: null, city: null }));
-    }
-  }, [formData.country]);
-
-  useEffect(() => {
-    if (formData.country && formData.state) {
-      setCities(
-        City.getCitiesOfState(formData.country.isoCode, formData.state.isoCode)
-      );
-      setFormData((prev) => ({ ...prev, city: null }));
-    }
-  }, [formData.state, formData.country]);
 
   const fetchExistingData = async () => {
     try {
@@ -108,39 +91,26 @@ export default function BusinessEntitySetupStep({
         .eq("user_id", user.id)
         .single();
 
-      // Extract domain from user's email if no domain is set
       const businessDomain =
         registration?.domain || extractBusinessDomain(user.email);
 
-      // If we found a business domain and no existing data was fetched, trigger the API call
       if (businessDomain && !registration?.domain) {
         fetchBusinessInfo(businessDomain);
       }
 
       if (registration) {
-        const country = registration.country_code
-          ? Country.getCountryByCode(registration.country_code)
-          : null;
-
-        const state =
-          country && registration.state_code
-            ? State.getStateByCodeAndCountry(
-                registration.state_code,
-                country.isoCode
-              )
-            : null;
-
         setFormData({
           domain: businessDomain || "",
           description: registration.description || "",
           industry: registration.industry || "",
           entityName: registration.entity_name || "",
           registrationType: registration.registration_type || "",
-          country: country,
-          state: state,
-          city: registration.city_name
-            ? { name: registration.city_name }
-            : null,
+          jurisdiction: registration.jurisdiction || "",
+          city_name: registration.city_name || "",
+          state_name: registration.state_name || "",
+          state_code: registration.state_code || "",
+          country_name: registration.country_name || "",
+          country_code: registration.country_code || "",
           authorizedSignatory: registration.authorized_signatory || "me",
           signatoryEmail: registration.signatory_email || "",
         });
@@ -201,6 +171,45 @@ export default function BusinessEntitySetupStep({
     }
   };
 
+  const extractLocationData = (placeDetails) => {
+    let cityName = "";
+    let stateName = "";
+    let stateCode = "";
+    let countryName = "";
+    let countryCode = "";
+
+    placeDetails.address_components.forEach((component) => {
+      if (component.types.includes("locality")) {
+        cityName = component.long_name;
+      }
+      if (component.types.includes("administrative_area_level_1")) {
+        stateName = component.long_name;
+        stateCode = component.short_name;
+      }
+      if (component.types.includes("country")) {
+        countryName = component.long_name;
+        countryCode = component.short_name;
+      }
+    });
+
+    return {
+      city_name: cityName,
+      state_name: stateName,
+      state_code: stateCode,
+      country_name: countryName,
+      country_code: countryCode,
+    };
+  };
+
+  const handleJurisdictionChange = (data) => {
+    const locationData = extractLocationData(data.placeDetails);
+    setFormData((prev) => ({
+      ...prev,
+      jurisdiction: data.fullJurisdiction,
+      ...locationData,
+    }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
@@ -211,7 +220,6 @@ export default function BusinessEntitySetupStep({
       } = await supabase.auth.getUser();
       if (!user) throw new Error("No authenticated user");
 
-      // Verify registration belongs to user
       const { data: existingReg } = await supabase
         .from("registrations")
         .select("id")
@@ -223,7 +231,6 @@ export default function BusinessEntitySetupStep({
         throw new Error("Registration not found or unauthorized");
       }
 
-      // Update the existing registration
       const { error } = await supabase
         .from("registrations")
         .update({
@@ -232,9 +239,12 @@ export default function BusinessEntitySetupStep({
           industry: formData.industry,
           entity_name: formData.entityName,
           registration_type: formData.registrationType,
-          country_code: formData.country?.isoCode,
-          state_code: formData.state?.isoCode,
-          city_name: formData.city?.name,
+          jurisdiction: formData.jurisdiction,
+          city_name: formData.city_name,
+          state_name: formData.state_name,
+          state_code: formData.state_code,
+          country_name: formData.country_name,
+          country_code: formData.country_code,
           authorized_signatory: formData.authorizedSignatory,
           signatory_email: formData.signatoryEmail,
           status: "completed",
@@ -245,7 +255,6 @@ export default function BusinessEntitySetupStep({
 
       if (error) throw error;
 
-      // Modified redirect logic based on skipEmailVerification prop
       if (skipEmailVerification) {
         router.push("/dashboard");
       } else {
@@ -410,83 +419,15 @@ export default function BusinessEntitySetupStep({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="country">
-              Country <span className="text-red-500">*</span>
+            <Label htmlFor="jurisdiction">
+              Jurisdiction <span className="text-red-500">*</span>
             </Label>
-            <Select
-              value={formData.country?.isoCode}
-              onValueChange={(value) =>
-                setFormData({
-                  ...formData,
-                  country: countries.find((c) => c.isoCode === value),
-                })
-              }
-              required
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select country" />
-              </SelectTrigger>
-              <SelectContent>
-                {countries.map((country) => (
-                  <SelectItem key={country.isoCode} value={country.isoCode}>
-                    {country.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <JurisdictionSearch
+              value={formData.jurisdiction}
+              onChange={handleJurisdictionChange}
+              defaultValue="Select jurisdiction..."
+            />
           </div>
-
-          {states.length > 0 && (
-            <div className="space-y-2">
-              <Label>State/Province</Label>
-              <Select
-                value={formData.state?.isoCode}
-                onValueChange={(value) =>
-                  setFormData({
-                    ...formData,
-                    state: states.find((s) => s.isoCode === value),
-                  })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select state" />
-                </SelectTrigger>
-                <SelectContent>
-                  {states.map((state) => (
-                    <SelectItem key={state.isoCode} value={state.isoCode}>
-                      {state.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          {cities.length > 0 && (
-            <div className="space-y-2">
-              <Label>City</Label>
-              <Select
-                value={formData.city?.name}
-                onValueChange={(value) =>
-                  setFormData({
-                    ...formData,
-                    city: cities.find((c) => c.name === value),
-                  })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select city" />
-                </SelectTrigger>
-                <SelectContent>
-                  {cities.map((city) => (
-                    <SelectItem key={city.name} value={city.name}>
-                      {city.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
 
           <div className="space-y-2">
             <Label>

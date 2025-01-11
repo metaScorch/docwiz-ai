@@ -37,16 +37,27 @@ export function JurisdictionSearch({ value, onChange, defaultValue }) {
         const response = await fetch(
           `/api/places/autocomplete?input=${encodeURIComponent(searchTerm)}`
         );
-        const data = await response.json();
+        
+        const contentType = response.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+          throw new Error("Invalid response type from API");
+        }
 
-        console.log("API Response:", data);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
 
         if (data.predictions) {
           const formattedResults = data.predictions.map((prediction) => ({
             value: prediction.place_id,
             label: prediction.description,
+            placeId: prediction.place_id
           }));
           setSearchResults(formattedResults);
+        } else {
+          setSearchResults([]);
         }
       } catch (error) {
         console.error("Error fetching jurisdictions:", error);
@@ -57,6 +68,58 @@ export function JurisdictionSearch({ value, onChange, defaultValue }) {
     },
     []
   );
+
+  const getPlaceDetails = async (placeId) => {
+    try {
+      const response = await fetch(`/api/places/details?place_id=${placeId}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      let data;
+      try {
+        data = await response.json();
+      } catch (e) {
+        console.error('Failed to parse JSON response:', e);
+        const text = await response.text();
+        console.error('Raw response:', text);
+        throw new Error('Invalid JSON response from API');
+      }
+      
+      if (!data || !data.result) {
+        throw new Error('Invalid data structure from API');
+      }
+
+      return data.result;
+    } catch (error) {
+      console.error("Error fetching place details:", error);
+      // Return a minimal valid structure
+      return {
+        address_components: [],
+        formatted_address: value || defaultValue,
+        place_id: placeId
+      };
+    }
+  };
+
+  const handleSelect = async (result) => {
+    try {
+      setIsLoading(true);
+      const placeDetails = await getPlaceDetails(result.placeId);
+      onChange(result.label); // Simplified to just pass the label
+      setInputValue(result.label);
+      setOpen(false);
+    } catch (error) {
+      console.error('Error handling selection:', error);
+      // Still update the UI even if details fetch fails
+      onChange(result.label);
+      setInputValue(result.label);
+      setOpen(false);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -90,11 +153,7 @@ export function JurisdictionSearch({ value, onChange, defaultValue }) {
                 {searchResults.map((result) => (
                   <CommandItem
                     key={result.value}
-                    onSelect={() => {
-                      onChange(result.label);
-                      setInputValue(result.label);
-                      setOpen(false);
-                    }}
+                    onSelect={() => handleSelect(result)}
                   >
                     <Check
                       className={cn(

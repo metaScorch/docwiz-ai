@@ -51,6 +51,7 @@ export function NewAgreementForm() {
       if (registrationResult.status === 'fulfilled' && registrationResult.value) {
         setUserRegistration(registrationResult.value);
         setJurisdiction(
+          registrationResult.value.jurisdiction || 
           `${registrationResult.value.city_name}, ${registrationResult.value.state_name}, ${registrationResult.value.country_name}`
         );
       }
@@ -71,7 +72,7 @@ export function NewAgreementForm() {
       if (user) {
         const { data, error } = await supabase
           .from('registrations')
-          .select('city_name, state_name, country_name')
+          .select('city_name, state_name, country_name, jurisdiction')
           .eq('user_id', user.id)
           .single();
         
@@ -381,7 +382,8 @@ Example: I need a non-disclosure agreement for a freelance developer who will be
             value={jurisdiction}
             onChange={handleJurisdictionChange}
             defaultValue={userRegistration ? 
-              `${userRegistration.city_name}, ${userRegistration.state_name}, ${userRegistration.country_name}` : 
+              (userRegistration.jurisdiction || 
+              `${userRegistration.city_name}, ${userRegistration.state_name}, ${userRegistration.country_name}`) : 
               "Select jurisdiction"
             }
           />
