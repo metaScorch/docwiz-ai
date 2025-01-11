@@ -74,7 +74,10 @@ export function JurisdictionSearch({ value, onChange, defaultValue }) {
       const response = await fetch(`/api/places/details?place_id=${placeId}`);
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        return {
+          formatted_address: inputValue,
+          place_id: placeId
+        };
       }
 
       let data;
@@ -82,22 +85,24 @@ export function JurisdictionSearch({ value, onChange, defaultValue }) {
         data = await response.json();
       } catch (e) {
         console.error('Failed to parse JSON response:', e);
-        const text = await response.text();
-        console.error('Raw response:', text);
-        throw new Error('Invalid JSON response from API');
+        return {
+          formatted_address: inputValue,
+          place_id: placeId
+        };
       }
       
       if (!data || !data.result) {
-        throw new Error('Invalid data structure from API');
+        return {
+          formatted_address: inputValue,
+          place_id: placeId
+        };
       }
 
       return data.result;
     } catch (error) {
       console.error("Error fetching place details:", error);
-      // Return a minimal valid structure
       return {
-        address_components: [],
-        formatted_address: value || defaultValue,
+        formatted_address: inputValue,
         place_id: placeId
       };
     }
@@ -107,15 +112,13 @@ export function JurisdictionSearch({ value, onChange, defaultValue }) {
     try {
       setIsLoading(true);
       const placeDetails = await getPlaceDetails(result.placeId);
-      onChange(result.label); // Simplified to just pass the label
-      setInputValue(result.label);
+      const selectedValue = result.label;
+      onChange(selectedValue);
+      setInputValue(selectedValue);
       setOpen(false);
     } catch (error) {
-      console.error('Error handling selection:', error);
-      // Still update the UI even if details fetch fails
-      onChange(result.label);
-      setInputValue(result.label);
-      setOpen(false);
+      console.error("Error handling selection:", error);
+      toast.error("Failed to select jurisdiction");
     } finally {
       setIsLoading(false);
     }

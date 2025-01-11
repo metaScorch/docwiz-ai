@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, ArrowLeft } from "lucide-react";
+import { Loader2, ArrowLeft, ChevronsUpDown } from "lucide-react";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Select,
@@ -19,7 +19,21 @@ import {
 import { toast } from "sonner";
 import { extractBusinessDomain } from "@/utils/emailUtils";
 import { Separator } from "@/components/ui/separator";
-import { JurisdictionSearch } from "@/components/JurisdictionSearch";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Check } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const industries = [
   "Technology",
@@ -72,6 +86,10 @@ export default function BusinessEntitySetupStep({
   });
 
   const [isFetchingBusinessInfo, setIsFetchingBusinessInfo] = useState(false);
+  const [jurisdictionSearchOpen, setJurisdictionSearchOpen] = useState(false);
+  const [jurisdictionResults, setJurisdictionResults] = useState([]);
+  const [jurisdictionInput, setJurisdictionInput] = useState("");
+  const [isSearchingJurisdiction, setIsSearchingJurisdiction] = useState(false);
 
   useEffect(() => {
     fetchExistingData();
@@ -201,13 +219,49 @@ export default function BusinessEntitySetupStep({
     };
   };
 
-  const handleJurisdictionChange = (data) => {
-    const locationData = extractLocationData(data.placeDetails);
+  const searchJurisdictions = useCallback(async (searchTerm) => {
+    setJurisdictionInput(searchTerm);
+    if (!searchTerm || searchTerm.length < 2) {
+      setJurisdictionResults([]);
+      return;
+    }
+
+    setIsSearchingJurisdiction(true);
+    try {
+      const response = await fetch(
+        `/api/places/autocomplete?input=${encodeURIComponent(searchTerm)}`
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data.predictions) {
+        const formattedResults = data.predictions.map((prediction) => ({
+          value: prediction.place_id,
+          label: prediction.description,
+        }));
+        setJurisdictionResults(formattedResults);
+      } else {
+        setJurisdictionResults([]);
+      }
+    } catch (error) {
+      console.error("Error fetching jurisdictions:", error);
+      setJurisdictionResults([]);
+    } finally {
+      setIsSearchingJurisdiction(false);
+    }
+  }, []);
+
+  const handleJurisdictionSelect = (result) => {
     setFormData((prev) => ({
       ...prev,
-      jurisdiction: data.fullJurisdiction,
-      ...locationData,
+      jurisdiction: result.label,
     }));
+    setJurisdictionInput(result.label);
+    setJurisdictionSearchOpen(false);
   };
 
   const handleSubmit = async (e) => {
@@ -422,11 +476,59 @@ export default function BusinessEntitySetupStep({
             <Label htmlFor="jurisdiction">
               Jurisdiction <span className="text-red-500">*</span>
             </Label>
-            <JurisdictionSearch
-              value={formData.jurisdiction}
-              onChange={handleJurisdictionChange}
-              defaultValue="Select jurisdiction..."
-            />
+            <Popover
+              open={jurisdictionSearchOpen}
+              onOpenChange={setJurisdictionSearchOpen}
+            >
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={jurisdictionSearchOpen}
+                  className="w-full justify-between"
+                >
+                  {formData.jurisdiction || "Select jurisdiction..."}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[400px] p-0" align="start">
+                <Command shouldFilter={false}>
+                  <CommandInput
+                    placeholder="Search jurisdictions..."
+                    value={jurisdictionInput}
+                    onValueChange={searchJurisdictions}
+                  />
+                  <ScrollArea className="max-h-[300px] overflow-auto">
+                    {isSearchingJurisdiction ? (
+                      <div className="flex items-center justify-center py-6">
+                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                      </div>
+                    ) : jurisdictionResults.length === 0 ? (
+                      <CommandEmpty>No results found.</CommandEmpty>
+                    ) : (
+                      <CommandGroup>
+                        {jurisdictionResults.map((result) => (
+                          <CommandItem
+                            key={result.value}
+                            onSelect={() => handleJurisdictionSelect(result)}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                formData.jurisdiction === result.label
+                                  ? "opacity-100"
+                                  : "opacity-0"
+                              )}
+                            />
+                            {result.label}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    )}
+                  </ScrollArea>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
 
           <div className="space-y-2">

@@ -20,6 +20,9 @@ import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import ChangePreview from "./ChangePreview";
 import { Wand2 } from "lucide-react";
 import { posthog } from "@/lib/posthog";
+import { useRouter } from "next/navigation";
+import Image from "next/image";
+import { Loader2 } from "lucide-react";
 
 // Create a new lowlight instance with common languages
 const lowlight = createLowlight(common);
@@ -81,6 +84,7 @@ export default function Editor({
   const [isProcessing, setIsProcessing] = useState(false);
   const [previewChanges, setPreviewChanges] = useState(null);
   const supabase = createClientComponentClient();
+  const router = useRouter();
 
   // Function to extract placeholders from content
   const extractPlaceholders = useCallback((text) => {
@@ -510,14 +514,53 @@ export default function Editor({
     }
   }, [editor, documentId]);
 
+  // Add this effect to check document status
+  useEffect(() => {
+    const checkDocumentStatus = async () => {
+      if (!documentId) return;
+
+      const { data: document, error } = await supabase
+        .from("user_documents")
+        .select("status")
+        .eq("id", documentId)
+        .single();
+
+      if (error) {
+        console.error("Error fetching document status:", error);
+        return;
+      }
+
+      // Redirect if status is pending_signature or completed
+      if (
+        document.status === "pending_signature" ||
+        document.status === "completed"
+      ) {
+        router.push(`/editor/document/${documentId}/tracking`);
+      }
+    };
+
+    checkDocumentStatus();
+  }, [documentId, supabase, router]);
+
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
   if (!isMounted) {
     return (
-      <div className="min-h-[calc(100vh-200px)] p-4 border rounded-lg">
-        Loading editor...
+      <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Image
+            src="/logo.png"
+            alt="DocWiz Logo"
+            width={180}
+            height={60}
+            priority
+            className="h-auto mb-4"
+          />
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">Loading editor...</p>
+        </div>
       </div>
     );
   }
