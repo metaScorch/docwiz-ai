@@ -21,8 +21,14 @@ const supabase = createClient(
 
 export async function POST(req) {
   try {
-    const { prompt, userId, jurisdiction, complexity, length } =
-      await req.json();
+    const {
+      prompt,
+      userId,
+      jurisdiction,
+      complexity,
+      length,
+      businessContext,
+    } = await req.json();
 
     // Check rate limits
     const rateLimit = await checkRateLimit(userId);
@@ -63,6 +69,19 @@ export async function POST(req) {
       5: "Use comprehensive legal language with technical precision.",
     };
 
+    const businessContextPrompt = businessContext
+      ? `
+Additional Business Context:
+- Entity Name: ${businessContext.entity_name}
+- Organization Type: ${businessContext.organization_type}
+- Industry: ${businessContext.industry}
+- Business Description: ${businessContext.description}
+- Jurisdiction: ${businessContext.jurisdiction}
+
+Please tailor the agreement specifically for this business context, incorporating relevant industry-specific terms and considerations while maintaining the requested complexity level.
+    `
+      : "";
+
     const completion = await openai.chat.completions.create({
       model: "chatgpt-4o-latest",
       messages: [
@@ -86,6 +105,8 @@ export async function POST(req) {
          - "currency": Required if type is "currency", specify "USD" or "INR" based on jurisdiction.
          - "pattern": Optional regex pattern for validation.
       - "signer" (boolean): **Optional**, include only if the placeholder represents a signing party's name.
+
+${businessContextPrompt}
 
 Important: Do not include any signature blocks, signature lines, or signature sections in the document content. These will be handled separately by the system.
 
