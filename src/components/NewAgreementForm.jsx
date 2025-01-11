@@ -26,6 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 
@@ -431,7 +432,7 @@ Example: I need a non-disclosure agreement for a freelance developer who will be
                 <DialogTrigger asChild>
                   <Info className="h-4 w-4 text-muted-foreground cursor-pointer hover:text-primary" />
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-[425px]">
+                <DialogContent className="sm:max-w-[640px]">
                   <DialogHeader>
                     <DialogTitle>Business Context Details</DialogTitle>
                   </DialogHeader>
@@ -487,6 +488,11 @@ Example: I need a non-disclosure agreement for a freelance developer who will be
                       </p>
                     </div>
                   </div>
+                  <DialogFooter>
+                    <Button type="button" onClick={() => setShowContextDialog(false)}>
+                      Done
+                    </Button>
+                  </DialogFooter>
                 </DialogContent>
               </Dialog>
             </div>
