@@ -19,6 +19,7 @@ import SuggestionPopup from "./SuggestionPopup";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import ChangePreview from "./ChangePreview";
 import { Wand2 } from "lucide-react";
+import { posthog } from "@/lib/posthog";
 
 // Create a new lowlight instance with common languages
 const lowlight = createLowlight(common);
@@ -67,6 +68,11 @@ export default function Editor({
   onChange,
   documentId,
   onImproveFormatting,
+  featureCounts,
+  onUpdateFeatureCount,
+  setCurrentFeature,
+  setShowUpgradeModal,
+  hasActiveSubscription,
 }) {
   const [isMounted, setIsMounted] = useState(false);
   const [documentValues, setDocumentValues] = useState({});
@@ -253,6 +259,13 @@ export default function Editor({
 
   // Placeholder value handling
   const handlePlaceholderChange = async (name, value) => {
+    posthog.capture("placeholder_updated", {
+      document_id: documentId,
+      placeholder_name: name,
+      has_value: !!value,
+      is_signer: documentValues[name]?.signer || false,
+    });
+
     console.log("Updating placeholder:", name, "with value:", value);
 
     // Update local state
@@ -315,7 +328,26 @@ export default function Editor({
 
   // AI improvement handling
   const handleSuggestionSubmit = async (prompt, shouldFormat = false) => {
+    posthog.capture("ai_improvement_started", {
+      document_id: documentId,
+      selection_length: selection?.text?.length,
+      format_requested: shouldFormat,
+      has_subscription: hasActiveSubscription,
+    });
+
     if (!selection) return;
+
+    // Only check limits for non-subscribed users
+    if (!hasActiveSubscription) {
+      const AMENDMENTS_LIMIT = 3;
+      if (featureCounts.amendments >= AMENDMENTS_LIMIT) {
+        setCurrentFeature("amendments");
+        setShowUpgradeModal(true);
+        setPopupPosition(null);
+        setSelection(null);
+        return;
+      }
+    }
 
     setIsProcessing(true);
     try {
@@ -346,9 +378,7 @@ export default function Editor({
         const formatResponse = await fetch("/api/improve-formatting", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            content: updatedContent,
-          }),
+          body: JSON.stringify({ content: updatedContent }),
         });
 
         const formatData = await formatResponse.json();
@@ -370,8 +400,26 @@ export default function Editor({
         });
       }
 
+      // Always update count for analytics
+      if (data.improvedText) {
+        await onUpdateFeatureCount("amendments");
+      }
+
       setPopupPosition(null);
+
+      // Track successful improvement
+      posthog.capture("ai_improvement_completed", {
+        document_id: documentId,
+        processing_time: Date.now() - startTime,
+        success: true,
+        format_requested: shouldFormat,
+      });
     } catch (error) {
+      posthog.capture("ai_improvement_error", {
+        document_id: documentId,
+        error_message: error.message,
+        format_requested: shouldFormat,
+      });
       console.error("Error improving text:", error);
     } finally {
       setIsProcessing(false);
@@ -379,6 +427,13 @@ export default function Editor({
   };
 
   const handleAcceptChanges = () => {
+    posthog.capture("ai_changes_accepted", {
+      document_id: documentId,
+      original_length: previewChanges?.originalText?.length,
+      new_length: previewChanges?.newText?.length,
+      is_formatting: !!previewChanges?.formattedDocument,
+    });
+
     if (!previewChanges) return;
 
     if (previewChanges.formattedDocument) {
@@ -400,6 +455,13 @@ export default function Editor({
   };
 
   const handleRejectChanges = () => {
+    posthog.capture("ai_changes_rejected", {
+      document_id: documentId,
+      original_length: previewChanges?.originalText?.length,
+      new_length: previewChanges?.newText?.length,
+      is_formatting: !!previewChanges?.formattedDocument,
+    });
+
     setPreviewChanges(null);
     setSelection(null);
   };
@@ -436,6 +498,17 @@ export default function Editor({
       }
     }
   }, [documentValues, content, editor, replaceContentPlaceholders]);
+
+  // Track editor initialization
+  useEffect(() => {
+    if (editor && documentId) {
+      posthog.capture("editor_loaded", {
+        document_id: documentId,
+        content_length: content?.length || 0,
+        has_placeholders: Object.keys(documentValues || {}).length > 0,
+      });
+    }
+  }, [editor, documentId]);
 
   useEffect(() => {
     setIsMounted(true);

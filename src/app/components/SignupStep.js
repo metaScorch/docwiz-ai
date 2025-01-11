@@ -1,131 +1,245 @@
+"use client";
+
 import { useState } from "react";
-import { Input } from "@/components/ui/input";
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { supabase } from "@/lib/supabase";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Info, Loader2, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
-import Image from "next/image";
+import { Separator } from "@/components/ui/separator";
+import { CardTitle, CardDescription } from "@/components/ui/card";
+import { useRouter } from "next/navigation";
 
-export default function SignupStep({ onNext, onError }) {
-  const [loading, setLoading] = useState(false);
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+export default function SignupStep({ onNext }) {
+  const supabase = createClientComponentClient();
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [isEmailLoading, setIsEmailLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [emailError, setEmailError] = useState("");
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+    fullName: "",
+  });
+  const router = useRouter();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleGoogleSignUp = async () => {
     try {
-      setLoading(true);
-
-      // First check if the email exists
-      const {
-        data: { users },
-        error: signInError,
-      } = await supabase.auth.signInWithOtp({
-        email,
+      setIsGoogleLoading(true);
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
         options: {
-          shouldCreateUser: false, // This prevents creating a new user
+          redirectTo: `${window.location.origin}/auth/callback`,
         },
       });
+      if (error) throw error;
+    } catch (error) {
+      console.error("Error:", error);
+      toast.error("Failed to sign up with Google");
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  };
 
-      // If no error, it means the email exists
-      if (!signInError) {
-        onError(
-          "This email is already registered. We've sent you a magic link to sign in. Check your email inbox."
-        );
-        return;
+  const handleEmailSignUp = async (e) => {
+    e.preventDefault();
+    setIsEmailLoading(true);
+    setEmailError("");
+
+    try {
+      // First check if email exists
+      const checkResponse = await fetch("/api/check-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: formData.email }),
+      });
+
+      const checkData = await checkResponse.json();
+
+      if (!checkResponse.ok) {
+        if (checkResponse.status === 400) {
+          // Email exists, send magic link
+          const { error: magicLinkError } = await supabase.auth.signInWithOtp({
+            email: formData.email,
+            options: {
+              emailRedirectTo: `${window.location.origin}/auth/callback`,
+            },
+          });
+
+          if (magicLinkError) throw magicLinkError;
+
+          setEmailError(
+            "This email is already registered. We've sent you a magic link to sign in!"
+          );
+          toast.success(
+            "This email is already registered. We've sent you a magic link to sign in!"
+          );
+          return;
+        }
+        throw new Error(checkData.error || "Failed to check email");
       }
 
-      // Proceed with signup if email doesn't exist
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
-        password,
+      // Email is available, proceed with signup
+      const { data, error } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
         options: {
-          data: { full_name: name },
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          data: { full_name: formData.fullName },
         },
       });
+      if (error) throw error;
 
-      if (authError) throw authError;
-
-      // Only proceed with registration if user creation was successful
-      const { data: registration, error: registrationError } = await supabase
-        .from("registrations")
-        .insert([
-          {
-            user_id: authData.user.id,
-            status: "pending",
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-        ])
-        .select()
-        .single();
-
-      if (registrationError) throw registrationError;
-
-      // Progress to next step
-      onNext({
-        name,
-        email,
-        registrationId: registration.id,
-        userId: authData.user.id,
-      });
-
-      toast.success("Please check your email to verify your account.");
+      // Directly navigate to verify-email page with email
+      router.push(`/verify-email?email=${encodeURIComponent(formData.email)}`);
     } catch (error) {
-      onError(error.message || "Error during signup");
+      console.error("Error:", error);
+      setEmailError(error.message);
+      toast.error(error.message);
     } finally {
-      setLoading(false);
+      setIsEmailLoading(false);
     }
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-center mb-6">
-        <Image
-          src="/logo.png"
-          alt="DocWiz Logo"
-          width={200}
-          height={60}
-          priority
-        />
+    <div className="space-y-6">
+      <div className="space-y-2 text-center">
+        <CardTitle className="text-2xl font-bold">
+          Create your account
+        </CardTitle>
+        <CardDescription>Get started with DocWiz</CardDescription>
       </div>
-      <h1 className="text-2xl font-semibold text-center mb-6">Signup</h1>
-      <form onSubmit={handleSubmit} className="space-y-4">
+
+      {emailError && (
+        <Alert variant="destructive">
+          <Info className="h-4 w-4" />
+          <AlertDescription>{emailError}</AlertDescription>
+        </Alert>
+      )}
+
+      <Button
+        variant="outline"
+        className="w-full"
+        onClick={handleGoogleSignUp}
+        disabled={isGoogleLoading || isEmailLoading}
+      >
+        {isGoogleLoading ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            Signing up with Google...
+          </>
+        ) : (
+          <>
+            <svg
+              className="mr-2 h-4 w-4"
+              aria-hidden="true"
+              focusable="false"
+              data-prefix="fab"
+              data-icon="google"
+              role="img"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 488 512"
+            >
+              <path
+                fill="currentColor"
+                d="M488 261.8C488 403.3 391.1 504 248 504 110.8 504 0 393.2 0 256S110.8 8 248 8c66.8 0 123 24.5 166.3 64.9l-67.5 64.9C258.5 52.6 94.3 116.6 94.3 256c0 86.5 69.1 156.6 153.7 156.6 98.2 0 135-70.4 140.8-106.9H248v-85.3h236.1c2.3 12.7 3.9 24.9 3.9 41.4z"
+              ></path>
+            </svg>
+            Continue with Google
+          </>
+        )}
+      </Button>
+
+      <div className="relative">
+        <div className="absolute inset-0 flex items-center">
+          <Separator className="w-full" />
+        </div>
+        <div className="relative flex justify-center text-xs uppercase">
+          <span className="bg-background px-2 text-muted-foreground">
+            Or continue with
+          </span>
+        </div>
+      </div>
+
+      <form onSubmit={handleEmailSignUp} className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="name">Name</Label>
+          <Label htmlFor="fullName">Full Name</Label>
           <Input
-            id="name"
-            placeholder="Enter your name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+            id="fullName"
+            placeholder="John Doe"
+            value={formData.fullName}
+            onChange={(e) =>
+              setFormData({ ...formData, fullName: e.target.value })
+            }
             required
           />
         </div>
+
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>
           <Input
             id="email"
             type="email"
-            placeholder="Enter your email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+            value={formData.email}
+            onChange={(e) =>
+              setFormData({ ...formData, email: e.target.value })
+            }
             required
           />
         </div>
+
         <div className="space-y-2">
           <Label htmlFor="password">Password</Label>
-          <Input
-            id="password"
-            type="password"
-            placeholder="Enter your password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
+          <div className="relative">
+            <Input
+              id="password"
+              type={showPassword ? "text" : "password"}
+              placeholder="Create a password"
+              value={formData.password}
+              onChange={(e) =>
+                setFormData({ ...formData, password: e.target.value })
+              }
+              required
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+              onClick={() => setShowPassword(!showPassword)}
+            >
+              {showPassword ? (
+                <EyeOff className="h-4 w-4" />
+              ) : (
+                <Eye className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
         </div>
-        <Button type="submit" disabled={loading} className="w-full">
-          {loading ? "Loading..." : "Sign Up with Email"}
+
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertDescription>
+            Password must be at least 8 characters long
+          </AlertDescription>
+        </Alert>
+
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={isGoogleLoading || isEmailLoading}
+        >
+          {isEmailLoading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              Creating Account...
+            </>
+          ) : (
+            "Create Account"
+          )}
         </Button>
       </form>
     </div>

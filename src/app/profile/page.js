@@ -38,6 +38,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { posthog } from "@/lib/posthog";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -117,6 +118,14 @@ export default function ProfilePage() {
       setProfile({ ...profile, ...formData });
       setEditing(false);
       toast.success("Profile updated successfully.");
+      posthog.capture("profile_updated", {
+        updated_fields: Object.keys(formData).filter(
+          (key) => formData[key] !== profile[key]
+        ),
+        has_entity_name: !!formData.entity_name,
+        industry: formData.industry,
+        jurisdiction: formData.jurisdiction,
+      });
     } catch (error) {
       console.error("Error updating profile:", error);
       toast.error("Failed to update profile. Please try again.");

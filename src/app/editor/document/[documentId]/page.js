@@ -2,76 +2,112 @@
 
 import { useEffect, useState } from "react";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
 import Editor from "@/components/Editor";
 import { formatDistanceToNow } from "date-fns";
 import { use } from "react";
 import LoadingModal from "@/components/LoadingModal";
 import { redirect } from "next/navigation";
+import { UpgradeModal } from "@/components/UpgradeModal";
 
 export default function EditorPage({ params }) {
   const resolvedParams = use(params);
   const documentId = resolvedParams.documentId;
   const router = useRouter();
   const supabase = createClientComponentClient();
+  const [hasActiveSubscription, setHasActiveSubscription] = useState(false);
   const [userDocument, setUserDocument] = useState(null);
   const [content, setContent] = useState("");
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [, setForceUpdate] = useState(0);
   const [isFormatting, setIsFormatting] = useState(false);
+  const [featureCounts, setFeatureCounts] = useState({
+    amendments: 0,
+    autoformat: 0,
+  });
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [currentFeature, setCurrentFeature] = useState(null);
 
   const formatRelativeTime = (dateString) => {
     return formatDistanceToNow(new Date(dateString), { addSuffix: true });
   };
 
   useEffect(() => {
-    async function fetchDocument() {
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
+    async function fetchDocumentAndSubscription() {
+      try {
+        // Get current session
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
 
-      if (userError) {
-        console.error("Error getting user:", userError);
-        return;
-      }
+        if (!session?.user) {
+          console.log("No session found");
+          return;
+        }
 
-      // Fetch the user's document
-      const { data: document, error: documentError } = await supabase
-        .from("user_documents")
-        .select(
-          `
-          *,
-          template:templates(*)
-        `
-        )
-        .eq("id", documentId)
-        .eq("user_id", user.id)
-        .single();
+        // First get user's registration
+        const { data: registration, error: regError } = await supabase
+          .from("registrations")
+          .select("id")
+          .eq("user_id", session.user.id)
+          .single();
 
-      if (documentError) {
-        console.error("Error fetching document:", documentError);
-        return;
-      }
+        if (regError) {
+          console.error("Registration error:", regError);
+          return;
+        }
 
-      // Redirect to tracking page if document is pending signature or completed
-      if (
-        document.status === "pending_signature" ||
-        document.status === "completed"
-      ) {
-        router.push(`/editor/document/${documentId}/tracking`);
-        return;
-      }
+        if (!registration) {
+          console.log("No registration found");
+          return;
+        }
 
-      if (document) {
-        setUserDocument(document);
-        setContent(document.content);
+        // Then check subscription status using registration_id
+        const { data: subscription, error: subError } = await supabase
+          .from("subscriptions")
+          .select("status")
+          .eq("registration_id", registration.id)
+          .single();
+
+        // If no subscription found or error, user is on free plan
+        if (subError || !subscription) {
+          setHasActiveSubscription(false);
+        } else {
+          // User has active subscription
+          setHasActiveSubscription(subscription.status === "active");
+        }
+
+        // Fetch document data
+        const { data: document, error: docError } = await supabase
+          .from("user_documents")
+          .select("*")
+          .eq("id", documentId)
+          .single();
+
+        if (docError) {
+          console.error("Document error:", docError);
+          return;
+        }
+
+        if (document) {
+          setUserDocument(document);
+          setContent(document.content);
+          // Only set feature counts if no active subscription
+          if (!hasActiveSubscription) {
+            setFeatureCounts({
+              amendments: document.amendments_count || 0,
+              autoformat: document.autoformat_count || 0,
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Error in fetchDocumentAndSubscription:", error);
       }
     }
 
-    fetchDocument();
-  }, [documentId, supabase, router]);
+    fetchDocumentAndSubscription();
+  }, [documentId, supabase, hasActiveSubscription]);
 
   useEffect(() => {
     const intervalId = setInterval(() => {
@@ -126,22 +162,77 @@ export default function EditorPage({ params }) {
     setIsEditingTitle(false);
   };
 
+  const updateFeatureCount = async (feature) => {
+    // First get the current count from the database
+    const { data: currentDoc, error: fetchError } = await supabase
+      .from("user_documents")
+      .select(
+        feature === "amendments" ? "amendments_count" : "autoformat_count"
+      )
+      .eq("id", documentId)
+      .single();
+
+    if (fetchError) {
+      console.error("Error fetching current count:", fetchError);
+      return;
+    }
+
+    // Get the current count from DB, defaulting to 0 if null
+    const currentCount =
+      currentDoc[
+        feature === "amendments" ? "amendments_count" : "autoformat_count"
+      ] || 0;
+    const newCount = currentCount + 1;
+
+    // Update the database with the new count
+    const { error: updateError } = await supabase
+      .from("user_documents")
+      .update({
+        [feature === "amendments" ? "amendments_count" : "autoformat_count"]:
+          newCount,
+      })
+      .eq("id", documentId);
+
+    if (updateError) {
+      console.error("Error updating count:", updateError);
+      return;
+    }
+
+    // Only update the UI counter for non-subscribed users
+    if (!hasActiveSubscription) {
+      setFeatureCounts((prev) => ({
+        ...prev,
+        [feature]: newCount,
+      }));
+    }
+  };
+
   const handleImproveFormatting = async (currentContent) => {
+    // Only check limits for non-subscribed users
+    if (!hasActiveSubscription) {
+      const AUTOFORMAT_LIMIT = 3;
+      if (featureCounts.autoformat >= AUTOFORMAT_LIMIT) {
+        setCurrentFeature("autoformat");
+        setShowUpgradeModal(true);
+        return null;
+      }
+    }
+
     setIsFormatting(true);
     try {
       const response = await fetch("/api/improve-formatting", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          content: currentContent,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: currentContent }),
       });
 
       const data = await response.json();
-
       if (data.error) throw new Error(data.error);
+
+      // Always update the count for analytics
+      if (data.formattedContent) {
+        await updateFeatureCount("autoformat");
+      }
 
       return data.formattedContent;
     } catch (error) {
@@ -217,6 +308,10 @@ export default function EditorPage({ params }) {
         onChange={handleContentChange}
         documentId={documentId}
         onImproveFormatting={handleImproveFormatting}
+        featureCounts={featureCounts}
+        onUpdateFeatureCount={updateFeatureCount}
+        setCurrentFeature={setCurrentFeature}
+        setShowUpgradeModal={setShowUpgradeModal}
       />
 
       <div className="mt-4 text-sm text-muted-foreground bg-muted p-3 rounded-md">
@@ -225,6 +320,14 @@ export default function EditorPage({ params }) {
       </div>
 
       <LoadingModal isOpen={isFormatting} onCancel={handleCancelFormatting} />
+
+      <UpgradeModal
+        open={showUpgradeModal}
+        onOpenChange={setShowUpgradeModal}
+        limit={currentFeature === "amendments" ? 3 : 3}
+        feature={currentFeature}
+        currentCount={currentFeature ? featureCounts[currentFeature] : 0}
+      />
     </div>
   );
 }

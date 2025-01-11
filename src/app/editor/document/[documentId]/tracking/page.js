@@ -9,6 +9,8 @@ import Timeline from "./components/Timeline";
 import DocumentPreview from "./components/DocumentPreview";
 import { formatDistanceToNow } from "date-fns";
 import { Loader2 } from "lucide-react";
+import { trackDocumentEvent } from "@/lib/analytics";
+import { posthog } from "@/lib/posthog";
 
 export default function TrackingPage({ params }) {
   const documentId = use(params).documentId;
@@ -47,6 +49,38 @@ export default function TrackingPage({ params }) {
 
     fetchDocument();
   }, [documentId, supabase]);
+
+  useEffect(() => {
+    if (document?.status) {
+      trackDocumentEvent("document_status_changed", document);
+    }
+  }, [document?.status]);
+
+  // Track page view and document status
+  useEffect(() => {
+    if (document) {
+      posthog.capture("document_tracking_viewed", {
+        document_id: documentId,
+        document_status: document.status,
+        signer_count: document.document?.signers?.length || 0,
+        signing_events: document.signing_tracking?.length || 0,
+      });
+    }
+  }, [document, documentId]);
+
+  // Track status changes
+  useEffect(() => {
+    if (document?.status) {
+      posthog.capture("document_status_updated", {
+        document_id: documentId,
+        new_status: document.status,
+        signer_statuses: document.document?.signers?.map((s) => ({
+          status: s.status,
+          is_completed: s.status === "signed",
+        })),
+      });
+    }
+  }, [document?.status, documentId]);
 
   if (loading) {
     return (

@@ -19,10 +19,5 @@ export async function middleware(req) {
 }
 
 export const config = {
-  matcher: [
-    "/dashboard/:path*",
-    "/verify-email",
-    "/auth/callback",
-    // Don't include /api/signwell/webhook
-  ],
+  matcher: ["/dashboard/:path*", "/verify-email", "/auth/callback"],
 };

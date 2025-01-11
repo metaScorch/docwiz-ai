@@ -13,6 +13,7 @@ import {
   generateSignwellPDF,
 } from "@/components/PDFGenerator";
 import { Loader2 } from "lucide-react";
+import { posthog } from "@/lib/posthog";
 
 export default function PreviewPage({ params }) {
   const documentId = use(params).documentId;
@@ -70,7 +71,22 @@ export default function PreviewPage({ params }) {
     fetchDocument();
   }, [documentId, supabase]);
 
+  // Track page load
+  useEffect(() => {
+    if (document) {
+      posthog.capture("document_preview_viewed", {
+        document_id: documentId,
+        has_signers: signers.length > 0,
+        document_status: document.status,
+      });
+    }
+  }, [document, documentId]);
+
   const handleEmailChange = (signerName, email) => {
+    posthog.capture("signer_email_updated", {
+      document_id: documentId,
+      is_valid_email: emailRegex.test(email),
+    });
     // Simply update the email value without validation
     setSignerEmails((prev) => ({
       ...prev,
@@ -79,6 +95,16 @@ export default function PreviewPage({ params }) {
   };
 
   const handleSendForSigning = async () => {
+    const startTime = Date.now();
+
+    posthog.capture("document_signing_started", {
+      document_id: documentId,
+      signer_count: signers.length,
+      has_all_emails: Object.values(signerEmails).every(
+        (email) => email && emailRegex.test(email)
+      ),
+    });
+
     setIsProcessing(true);
     try {
       // Debug logs for placeholder values
@@ -196,9 +222,21 @@ export default function PreviewPage({ params }) {
 
       if (updateError) throw updateError;
 
+      posthog.capture("document_signing_completed", {
+        document_id: documentId,
+        processing_time: Date.now() - startTime,
+        signer_count: signers.length,
+        success: true,
+      });
+
       toast.success("Document sent for signing!");
       router.push("/dashboard");
     } catch (error) {
+      posthog.capture("document_signing_error", {
+        document_id: documentId,
+        error_message: error.message,
+        processing_time: Date.now() - startTime,
+      });
       console.error("Error:", error);
       toast.error(error.message || "Failed to send document for signing");
     } finally {

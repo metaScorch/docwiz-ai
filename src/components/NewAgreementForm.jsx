@@ -8,6 +8,11 @@ import { Select } from "@/components/ui/select";
 import { JurisdictionSearch } from "@/components/JurisdictionSearch";
 import { Slider } from "@/components/ui/slider";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { UpgradeModal } from "@/components/UpgradeModal";
+import { checkDocumentLimit } from "@/utils/usageLimits";
+import { toast } from "sonner"; // Add Sonner import
+import { Toaster } from "sonner"; // Add Toaster import
+import { posthog } from '@/lib/posthog';
 
 export function NewAgreementForm() {
   const router = useRouter();
@@ -22,6 +27,8 @@ export function NewAgreementForm() {
   const [generationStep, setGenerationStep] = useState(0);
   const [legalityError, setLegalityError] = useState(null);
   const [rateLimitError, setRateLimitError] = useState(null);
+  const [showUpgrade, setShowUpgrade] = useState(false);
+  const [limitData, setLimitData] = useState(null);
 
   const generationSteps = [
     "Understanding the requirement",
@@ -33,7 +40,33 @@ export function NewAgreementForm() {
   ];
 
   useEffect(() => {
-    const fetchUserRegistration = async () => {
+    // Fetch user registration and limit data in parallel
+    const initializeForm = async () => {
+      const [registrationResult, limitResult] = await Promise.allSettled([
+        fetchUserRegistration(),
+        checkUserLimits()
+      ]);
+
+      // Handle registration result
+      if (registrationResult.status === 'fulfilled' && registrationResult.value) {
+        setUserRegistration(registrationResult.value);
+        setJurisdiction(
+          `${registrationResult.value.city_name}, ${registrationResult.value.state_name}, ${registrationResult.value.country_name}`
+        );
+      }
+
+      // Handle limit result
+      if (limitResult.status === 'fulfilled' && limitResult.value) {
+        setLimitData(limitResult.value);
+      }
+    };
+
+    initializeForm();
+  }, []);
+
+  // Separate functions for cleaner code
+  const fetchUserRegistration = async () => {
+    try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const { data, error } = await supabase
@@ -42,34 +75,103 @@ export function NewAgreementForm() {
           .eq('user_id', user.id)
           .single();
         
-        if (data) {
-          setUserRegistration(data);
-          // Set default jurisdiction from registration
-          setJurisdiction(`${data.city_name}, ${data.state_name}, ${data.country_name}`);
-        }
+        if (error) throw error;
+        return data;
       }
-    };
+    } catch (error) {
+      console.error('Error fetching user registration:', error);
+      return null;
+    }
+  };
 
-    fetchUserRegistration();
-  }, [supabase]);
+  const checkUserLimits = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        return await checkDocumentLimit(user.id);
+      }
+    } catch (error) {
+      console.error('Error checking document limit:', error);
+      return null;
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Reset errors at the start
-    setRateLimitError(null);
-    setLegalityError(null);
+    const startTime = Date.now();
     
     if (!jurisdiction) {
       setJurisdictionError(true);
+      // Track validation error
+      posthog.capture('agreement_generation_validation_error', {
+        error_type: 'missing_jurisdiction'
+      });
       return;
     }
-    setJurisdictionError(false);
-    setLoading(true);
-    setGenerationStep(0);
 
     try {
-      // Start the loading states animation immediately
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      // Track generation attempt
+      posthog.capture('agreement_generation_started', {
+        jurisdiction,
+        complexity,
+        length,
+        prompt_length: prompt.length,
+        has_subscription: false // Will be updated below
+      });
+
+      setLoading(true);
+      setGenerationStep(0);
+
+      // First get user's registration
+      const { data: registration } = await supabase
+        .from("registrations")
+        .select("id")
+        .eq("user_id", user.id)
+        .single();
+
+      if (!registration) return;
+
+      // Check subscription status using registration_id
+      const { data: subscription } = await supabase
+        .from("subscriptions")
+        .select("status")
+        .eq("registration_id", registration.id)
+        .single();
+
+      // Set subscription status for limit checking
+      const hasActiveSubscription = subscription?.status === "active";
+
+      // Only check limits if no active subscription
+      if (!hasActiveSubscription) {
+        const limitInfo = await checkDocumentLimit(user.id);
+        setLimitData(limitInfo);
+        
+        if (!limitInfo.allowed) {
+          setLoading(false);
+          setShowUpgrade(true);
+          // Track limit reached
+          posthog.capture('agreement_generation_limit_reached', {
+            current_count: limitInfo.currentCount,
+            limit: limitInfo.limit,
+            cycle_end: limitInfo.cycleEnd
+          });
+          return;
+        }
+
+        posthog.capture('agreement_generation_limit_check', {
+          current_count: limitInfo.currentCount,
+          limit: limitInfo.limit,
+          remaining: limitInfo.limit - limitInfo.currentCount
+        });
+      }
+
+      setJurisdictionError(false);
+      
+      // Start the loading states animation
       const loadingStatesPromise = (async () => {
         for (let i = 0; i < generationSteps.length - 1; i++) {
           const delay = i === 4 ? 4000 : 2000;
@@ -79,14 +181,9 @@ export function NewAgreementForm() {
       })();
 
       // Make the API call in parallel
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
       const response = await fetch('/api/generate-agreement', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt,
           userId: user.id,
@@ -98,40 +195,56 @@ export function NewAgreementForm() {
 
       const data = await response.json();
       
-      // Handle rate limit response FIRST
       if (response.status === 429) {
         setRateLimitError({
           message: "Error generating agreement",
           details: "Rate limit exceeded",
           resetIn: data.resetIn
         });
-        setLoading(false);
+        // Track rate limit error
+        posthog.capture('agreement_generation_rate_limit', {
+          reset_in: data.resetIn
+        });
         return;
       }
       
-      // Then handle other responses
       if (response.status === 422) {
         setLegalityError({
           message: "This agreement cannot be generated",
           details: data.legalityNotes
         });
-        setLoading(false);
+        // Track legality error
+        posthog.capture('agreement_generation_legality_error', {
+          jurisdiction,
+          error_details: data.legalityNotes
+        });
         return;
       }
 
       if (!response.ok) throw new Error(data.error);
 
-      // Wait for both the loading states and API call to complete
       await loadingStatesPromise;
+      
+      // Track successful generation
+      posthog.capture('agreement_generation_completed', {
+        document_id: data.id,
+        generation_time: Date.now() - startTime,
+        complexity,
+        length,
+        jurisdiction
+      });
 
-      // Only redirect if everything is successful
       router.push(`/editor/document/${data.id}`);
 
     } catch (error) {
       console.error('Error:', error);
-      setLegalityError({
-        message: "Error generating agreement",
-        details: error.message
+      // Track generation error
+      posthog.capture('agreement_generation_error', {
+        error_message: error.message,
+        error_type: error.name
+      });
+      toast.error("Failed to generate agreement", {
+        description: error.message
       });
     } finally {
       setLoading(false);
@@ -193,107 +306,149 @@ export function NewAgreementForm() {
     return `${hours} hour${hours > 1 ? 's' : ''} ${remainingMinutes > 0 ? `and ${remainingMinutes} minute${remainingMinutes > 1 ? 's' : ''}` : ''}`;
   };
 
+  // Track form field changes
+  const handleComplexityChange = (value) => {
+    setComplexity(value);
+    posthog.capture('agreement_complexity_changed', {
+      complexity: value,
+      complexity_label: getComplexityLabel(value)
+    });
+  };
+
+  const handleLengthChange = (value) => {
+    setLength(value);
+    posthog.capture('agreement_length_changed', {
+      length: value,
+      length_label: getLengthLabel(value)
+    });
+  };
+
+  const handleJurisdictionChange = (value) => {
+    setJurisdiction(value);
+    posthog.capture('agreement_jurisdiction_changed', {
+      jurisdiction: value,
+      is_default: value === `${userRegistration?.city_name}, ${userRegistration?.state_name}, ${userRegistration?.country_name}`
+    });
+  };
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {legalityError && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>{legalityError.message}</AlertTitle>
-          <AlertDescription>
-            {legalityError.details}
-          </AlertDescription>
-        </Alert>
-      )}
-      {rateLimitError && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error generating agreement</AlertTitle>
-          <AlertDescription className="space-y-2">
-            <p>Ouch, You've hit usage limits, Contact support for higher limits</p>
-           
-            <b>
-              Please try again in {formatTimeRemaining(rateLimitError.resetIn)}
-            </b>
-          </AlertDescription>
-        </Alert>
-      )}
-      <div className="space-y-2">
-        <div className="flex items-center gap-2 mb-2">
-          <Wand2 className="h-4 w-4" />
-          <span className="text-sm text-muted-foreground">AI-Powered Generation</span>
-        </div>
-        <Textarea
-          placeholder="Explain what agreement you need and for what purpose...
+    <>
+      <Toaster />
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {legalityError && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>{legalityError.message}</AlertTitle>
+            <AlertDescription>
+              {legalityError.details}
+            </AlertDescription>
+          </Alert>
+        )}
+        {rateLimitError && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error generating agreement</AlertTitle>
+            <AlertDescription className="space-y-2">
+              <p>Ouch, You've hit usage limits, Contact support for higher limits</p>
+             
+              <b>
+                Please try again in {formatTimeRemaining(rateLimitError.resetIn)}
+              </b>
+            </AlertDescription>
+          </Alert>
+        )}
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 mb-2">
+            <Wand2 className="h-4 w-4" />
+            <span className="text-sm text-muted-foreground">AI-Powered Generation</span>
+          </div>
+          <Textarea
+            placeholder="Explain what agreement you need and for what purpose...
 Example: I need a non-disclosure agreement for a freelance developer who will be working on my startup"
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          className="min-h-[120px]"
-        />
-        <p className="text-sm text-muted-foreground">
-          Tip: Check our templates first to save time - we have many common agreements ready to use.
-        </p>
-      </div>
-      <div className="space-y-2">
-        <label className="text-sm text-muted-foreground">
-          Jurisdiction <span className="text-red-500">*</span>
-        </label>
-        <JurisdictionSearch
-          value={jurisdiction}
-          onChange={setJurisdiction}
-          defaultValue={userRegistration ? 
-            `${userRegistration.city_name}, ${userRegistration.state_name}, ${userRegistration.country_name}` : 
-            "Select jurisdiction"
-          }
-        />
-        {jurisdictionError && (
-          <p className="text-sm text-red-500">
-            Please select a jurisdiction
-          </p>
-        )}
-        {userRegistration && (
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            className="min-h-[120px]"
+          />
           <p className="text-sm text-muted-foreground">
-            Default jurisdiction based on your registration
+            Tip: Check our templates first to save time - we have many common agreements ready to use.
           </p>
-        )}
-      </div>
-      <div className="space-y-4">
+        </div>
         <div className="space-y-2">
-          <label className="text-sm text-muted-foreground">Wording Complexity</label>
-          <Slider
-            min={1}
-            max={5}
-            step={1}
-            value={[complexity]}
-            onValueChange={([value]) => setComplexity(value)}
-            className="w-full"
-            style={{
-              "--slider-color": "#0700c7"
-            }}
+          <label className="text-sm text-muted-foreground">
+            Jurisdiction <span className="text-red-500">*</span>
+          </label>
+          <JurisdictionSearch
+            value={jurisdiction}
+            onChange={handleJurisdictionChange}
+            defaultValue={userRegistration ? 
+              `${userRegistration.city_name}, ${userRegistration.state_name}, ${userRegistration.country_name}` : 
+              "Select jurisdiction"
+            }
           />
-          <p className="text-sm text-muted-foreground">{getComplexityLabel(complexity)}</p>
+          {jurisdictionError && (
+            <p className="text-sm text-red-500">
+              Please select a jurisdiction
+            </p>
+          )}
+          {userRegistration && (
+            <p className="text-sm text-muted-foreground">
+              Default jurisdiction based on your registration
+            </p>
+          )}
+        </div>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm text-muted-foreground">Wording Complexity</label>
+            <Slider
+              min={1}
+              max={5}
+              step={1}
+              value={[complexity]}
+              onValueChange={([value]) => handleComplexityChange(value)}
+              className="w-full"
+              style={{
+                "--slider-color": "#0700c7"
+              }}
+            />
+            <p className="text-sm text-muted-foreground">{getComplexityLabel(complexity)}</p>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm text-muted-foreground">Agreement Length</label>
+            <Slider
+              min={1}
+              max={5}
+              step={1}
+              value={[length]}
+              onValueChange={([value]) => handleLengthChange(value)}
+              className="w-full"
+              style={{
+                "--slider-color": "#0700c7"
+              }}
+            />
+            <p className="text-sm text-muted-foreground">{getLengthLabel(length)}</p>
+          </div>
         </div>
 
-        <div className="space-y-2">
-          <label className="text-sm text-muted-foreground">Agreement Length</label>
-          <Slider
-            min={1}
-            max={5}
-            step={1}
-            value={[length]}
-            onValueChange={([value]) => setLength(value)}
-            className="w-full"
-            style={{
-              "--slider-color": "#0700c7"
-            }}
-          />
-          <p className="text-sm text-muted-foreground">{getLengthLabel(length)}</p>
-        </div>
-      </div>
-      <Button type="submit" className="w-full" disabled={loading}>
-        {loading ? "Generating..." : "Generate Agreement"}
-      </Button>
+        <Button 
+          type="submit" 
+          className="w-full" 
+          disabled={loading}
+        >
+          {loading ? "Generating..." : "Generate Agreement"}
+        </Button>
 
-      {loading && <LoadingStates />}
-    </form>
+        {loading && <LoadingStates />}
+      </form>
+
+      <UpgradeModal
+        open={showUpgrade}
+        onOpenChange={setShowUpgrade}
+        currentCount={limitData?.currentCount || 0}
+        limit={limitData?.limit || 3}
+        cycleEnd={limitData?.cycleEnd}
+        isLoading={false}
+      />
+    </>
   );
 }

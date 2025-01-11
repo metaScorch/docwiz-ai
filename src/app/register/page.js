@@ -1,137 +1,114 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import SignupStep from "../components/SignupStep";
+import OrganizationTypeStep from "../components/OrganizationTypeStep";
+import BusinessEntitySetupStep from "../components/BusinessEntitySetupStep";
+import { toast } from "sonner";
 import {
   Card,
   CardContent,
+  CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import SignupStep from "../components/SignupStep";
-import OrganizationTypeStep from "../components/OrganizationTypeStep";
-import BusinessDetailsStep from "../components/BusinessDetailsStep";
-import EntityDetailsStep from "../components/EntityDetailsStep";
+import { Progress } from "@/components/ui/progress";
+import Image from "next/image";
+import Link from "next/link";
 
-const steps = [
-  "Signup",
-  "Organization Type",
-  "Business Details",
-  "Entity Details",
-];
-
-export default function OnboardingForm() {
+export default function RegisterPage() {
+  const router = useRouter();
+  const supabase = createClientComponentClient();
   const [currentStep, setCurrentStep] = useState(0);
-  const [formData, setFormData] = useState({});
-  const [error, setError] = useState(null);
+  const [registrationId, setRegistrationId] = useState(null);
+  const [email, setEmail] = useState("");
 
-  const handleNext = (stepData) => {
-    if (!stepData.error) {
-      setError(null);
-      setFormData({ ...formData, ...stepData });
-      setCurrentStep((prev) => Math.min(prev + 1, steps.length - 1));
-    }
+  // Check for existing session and registration
+  useEffect(() => {
+    const checkSession = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user) {
+        // Immediately redirect to verify-email page if user exists
+        router.push("/verify-email");
+        setEmail(user.email || "");
+      }
+    };
+
+    checkSession();
+  }, [router, supabase]);
+
+  const handleSignupComplete = async (userData) => {
+    // No need to handle email here anymore
+    // The SignupStep component will handle the navigation
   };
 
-  const handleError = (errorMessage) => {
-    setError(errorMessage);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+  const handleOrganizationTypeComplete = () => {
+    setCurrentStep(2);
   };
 
-  console.log("Rendered with formData:", formData); // Debug log
+  const handleBusinessDetailsComplete = () => {
+    setCurrentStep(3);
+  };
+
+  const totalSteps = 3;
+  const progress = ((currentStep + 1) / totalSteps) * 100;
 
   const handleBack = () => {
-    setCurrentStep((prev) => Math.max(prev - 1, 0));
-  };
-
-  const handleSubmit = () => {
-    console.log("Form submitted:", formData);
-  };
-
-  const renderStep = () => {
-    switch (currentStep) {
-      case 0:
-        return <SignupStep onNext={handleNext} onError={handleError} />;
-      case 1:
-        return (
-          <OrganizationTypeStep
-            onNext={handleNext}
-            registrationId={formData.registrationId}
-          />
-        );
-      case 2:
-        return (
-          <BusinessDetailsStep
-            onNext={handleNext}
-            registrationId={formData.registrationId}
-          />
-        );
-      case 3:
-        return (
-          <EntityDetailsStep
-            onNext={handleSubmit}
-            registrationId={formData.registrationId}
-          />
-        );
-      default:
-        return null;
+    if (currentStep > 1) {
+      // Don't allow going back from step 1
+      setCurrentStep(currentStep - 1);
     }
+  };
+
+  const renderCurrentStep = () => {
+    return <SignupStep onNext={handleSignupComplete} />;
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-r from-blue-100 to-purple-100 flex items-center justify-center p-4">
-      <Card className="w-full max-w-2xl">
-        <CardHeader>
-          <CardTitle className="text-2xl font-bold text-center">
-            {currentStep > 0 ? steps[currentStep] : ""}
-          </CardTitle>
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-b from-blue-50 to-purple-100 dark:from-blue-950 dark:to-purple-900">
+      <Card className="w-full max-w-[600px]">
+        <CardHeader className="space-y-1">
+          <div className="flex justify-center mb-4">
+            <Image
+              src="/logo.png"
+              alt="DocWiz Logo"
+              width={200}
+              height={60}
+              priority
+            />
+          </div>
+          {currentStep > 0 && (
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm text-muted-foreground">
+                <span>
+                  Step {currentStep + 1} of {totalSteps}
+                </span>
+                <span>{Math.round(progress)}% completed</span>
+              </div>
+              <Progress value={progress} className="h-2" />
+            </div>
+          )}
         </CardHeader>
-        <CardContent>
-          {error && (
-            <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
-              {error}
-              <Button
-                variant="link"
-                className="text-red-700 hover:text-red-900 ml-2"
-                onClick={() => (window.location.href = "/sign-in")}
+        <CardContent>{renderCurrentStep()}</CardContent>
+        {currentStep === 0 && (
+          <CardFooter>
+            <p className="text-center text-sm text-muted-foreground w-full">
+              Already have an account?{" "}
+              <Link
+                href="/sign-in"
+                className="text-primary hover:underline font-medium"
               >
                 Sign in
-              </Button>
-            </div>
-          )}
-          {renderStep()}
-        </CardContent>
-        <CardFooter className="flex flex-col gap-4">
-          <div className="flex justify-between w-full">
-            <Button
-              variant="outline"
-              onClick={handleBack}
-              disabled={currentStep === 0}
-            >
-              Back
-            </Button>
-            <div className="flex space-x-2">
-              {steps.map((_, index) => (
-                <div
-                  key={index}
-                  className={`w-3 h-3 rounded-full ${
-                    index === currentStep ? "bg-blue-500" : "bg-gray-300"
-                  }`}
-                />
-              ))}
-            </div>
-          </div>
-          {currentStep === 0 && (
-            <Button
-              variant="link"
-              className="text-blue-600 hover:text-blue-800"
-              onClick={() => (window.location.href = "/sign-in")}
-            >
-              Already have an account? Login
-            </Button>
-          )}
-        </CardFooter>
+              </Link>
+            </p>
+          </CardFooter>
+        )}
       </Card>
     </div>
   );
