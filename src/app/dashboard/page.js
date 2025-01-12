@@ -65,128 +65,200 @@ const PartiesDialog = ({
   onSearchChange,
   formatRelativeTime,
   router,
-}) => (
-  <Dialog open={open} onOpenChange={onOpenChange}>
-    <DialogContent className="max-w-[900px] max-h-[80vh]">
-      <DialogHeader>
-        <DialogTitle>Document Parties</DialogTitle>
-        <div className="mt-4">
-          <Input
-            type="text"
-            placeholder="Search by name, email, or document title..."
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="max-w-sm"
-          />
-        </div>
-      </DialogHeader>
-      <ScrollArea className="h-[60vh]">
-        {parties.length === 0 ? (
-          <div className="text-center text-muted-foreground py-8">
-            No parties found matching your search.
-          </div>
-        ) : (
-          parties.map((party) => (
-            <Card key={party.email} className="mb-4">
-              <CardHeader>
-                <CardTitle className="text-lg">
-                  {party.name} ({party.email})
-                </CardTitle>
-                <div className="text-sm text-muted-foreground">
-                  Total Documents: {party.documents.length}
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex gap-4">
-                    {["draft", "pending_signature", "completed"].map(
-                      (status) => (
-                        <div key={status} className="text-sm">
-                          <div className="font-medium">
-                            {status === "pending_signature"
-                              ? "Pending Signature"
-                              : status === "draft"
-                                ? "Draft"
-                                : "Completed"}
+}) => {
+  const [selectedParty, setSelectedParty] = useState(null);
+  const [showDocuments, setShowDocuments] = useState(false);
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-[1000px] max-h-[80vh]">
+          <DialogHeader className="space-y-4">
+            <DialogTitle className="text-2xl font-semibold">
+              Document Parties
+            </DialogTitle>
+            <Input
+              type="text"
+              placeholder="Search by name or email..."
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="max-w-md"
+            />
+          </DialogHeader>
+          <ScrollArea className="h-[60vh] mt-4">
+            {parties.length === 0 ? (
+              <div className="text-center text-muted-foreground py-8">
+                No parties found matching your search.
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="w-[250px]">Name</TableHead>
+                    <TableHead className="w-[300px]">Email</TableHead>
+                    <TableHead className="w-[120px] text-center">
+                      Total Documents
+                    </TableHead>
+                    <TableHead>Documents Status</TableHead>
+                    <TableHead className="text-right w-[150px]">
+                      Actions
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {parties.map((party) => (
+                    <TableRow key={party.email} className="hover:bg-muted/50">
+                      <TableCell className="font-medium">
+                        {party.name}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {party.email}
+                      </TableCell>
+                      <TableCell className="text-center font-medium">
+                        {party.documents.length}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-3">
+                          <div className="flex items-center gap-1.5">
+                            <div className="h-2 w-2 rounded-full bg-yellow-500" />
+                            <span className="text-sm">
+                              {
+                                party.documents.filter(
+                                  (doc) => doc.status === "draft"
+                                ).length
+                              }{" "}
+                              Draft
+                            </span>
                           </div>
-                          <div>
-                            {
-                              party.documents.filter(
-                                (doc) => doc.status === status
-                              ).length
-                            }
+                          <div className="flex items-center gap-1.5">
+                            <div className="h-2 w-2 rounded-full bg-blue-500" />
+                            <span className="text-sm">
+                              {
+                                party.documents.filter(
+                                  (doc) => doc.status === "pending_signature"
+                                ).length
+                              }{" "}
+                              Pending
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <div className="h-2 w-2 rounded-full bg-green-500" />
+                            <span className="text-sm">
+                              {
+                                party.documents.filter(
+                                  (doc) =>
+                                    doc.status === "completed" ||
+                                    doc.status === "signed"
+                                ).length
+                              }{" "}
+                              Completed
+                            </span>
                           </div>
                         </div>
-                      )
-                    )}
-                  </div>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Document</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Created</TableHead>
-                        <TableHead>Last Updated</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {party.documents.map((doc) => (
-                        <TableRow key={doc.id}>
-                          <TableCell>{doc.title}</TableCell>
-                          <TableCell>
-                            <span
-                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                doc.status === "draft"
-                                  ? "bg-yellow-100 text-yellow-800 border border-yellow-200"
-                                  : doc.status === "completed" ||
-                                      doc.status === "signed"
-                                    ? "bg-green-100 text-green-800 border border-green-200"
-                                    : doc.status === "pending_signature"
-                                      ? "bg-blue-100 text-blue-800 border border-blue-200"
-                                      : "bg-gray-100 text-gray-800 border border-gray-200"
-                              }`}
-                            >
-                              {doc.status === "pending_signature"
-                                ? "Pending Signature"
-                                : doc.status === "draft"
-                                  ? "Draft"
-                                  : doc.status === "completed" ||
-                                      doc.status === "signed"
-                                    ? "Completed"
-                                    : doc.status}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            {formatRelativeTime(doc.created_at)}
-                          </TableCell>
-                          <TableCell>
-                            {formatRelativeTime(doc.updated_at)}
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                router.push(`/editor/document/${doc.id}`)
-                              }
-                            >
-                              {doc.status === "draft" ? "Edit" : "View"}
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </ScrollArea>
-    </DialogContent>
-  </Dialog>
-);
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="hover:bg-primary hover:text-primary-foreground"
+                          onClick={() => {
+                            setSelectedParty(party);
+                            setShowDocuments(true);
+                          }}
+                        >
+                          View Documents
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Documents Dialog */}
+      <Dialog open={showDocuments} onOpenChange={setShowDocuments}>
+        <DialogContent className="max-w-[1000px] max-h-[80vh]">
+          <DialogHeader className="space-y-2">
+            <DialogTitle className="text-2xl font-semibold">
+              Documents for {selectedParty?.name}
+            </DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              {selectedParty?.email}
+            </p>
+          </DialogHeader>
+          <ScrollArea className="h-[60vh] mt-4">
+            {selectedParty && (
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="w-[300px]">Document Title</TableHead>
+                    <TableHead className="w-[150px]">Status</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead>Last Updated</TableHead>
+                    <TableHead className="text-right w-[100px]">
+                      Actions
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {selectedParty.documents.map((doc) => (
+                    <TableRow key={doc.id} className="hover:bg-muted/50">
+                      <TableCell className="font-medium">{doc.title}</TableCell>
+                      <TableCell>
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium whitespace-nowrap ${
+                            doc.status === "draft"
+                              ? "bg-yellow-100 text-yellow-800 border border-yellow-200"
+                              : doc.status === "completed" ||
+                                  doc.status === "signed"
+                                ? "bg-green-100 text-green-800 border border-green-200"
+                                : doc.status === "pending_signature"
+                                  ? "bg-blue-100 text-blue-800 border border-blue-200"
+                                  : "bg-gray-100 text-gray-800 border border-gray-200"
+                          }`}
+                        >
+                          {doc.status === "pending_signature"
+                            ? "Pending Signature"
+                            : doc.status === "draft"
+                              ? "Draft"
+                              : doc.status === "completed" ||
+                                  doc.status === "signed"
+                                ? "Completed"
+                                : doc.status}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {formatRelativeTime(doc.created_at)}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {formatRelativeTime(doc.updated_at)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="hover:bg-primary hover:text-primary-foreground"
+                          onClick={() =>
+                            router.push(`/editor/document/${doc.id}`)
+                          }
+                        >
+                          {doc.status === "draft" ? "Edit" : "View"}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+};
 
 // Dialog for showing signed documents
 const SignedDocumentsDialog = ({
@@ -376,19 +448,35 @@ export default function DashboardPage() {
             (doc) => doc.status === "completed" || doc.status === "signed"
           ).length;
 
-          // Count unique parties
-          const partiesSet = new Set();
+          // Create organized party data structure
+          const partiesMap = new Map();
           documents.forEach((doc) => {
             const signers = doc.document?.signers || [];
             signers.forEach((signer) => {
-              partiesSet.add(signer.email);
+              if (!partiesMap.has(signer.email)) {
+                partiesMap.set(signer.email, {
+                  email: signer.email,
+                  name: signer.name,
+                  documents: [],
+                });
+              }
+              partiesMap.get(signer.email).documents.push({
+                id: doc.id,
+                title: doc.title,
+                status: doc.status,
+                created_at: doc.created_at,
+                updated_at: doc.updated_at,
+              });
             });
           });
+
+          // Convert Map to array and set state
+          setUniqueParties(Array.from(partiesMap.values()));
 
           setStats({
             totalDocuments: totalDocs,
             signedDocuments: signedDocs,
-            totalParties: partiesSet.size,
+            totalParties: partiesMap.size,
           });
         }
 
@@ -980,7 +1068,7 @@ export default function DashboardPage() {
                     </TableCell>
                     <TableCell>
                       <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium whitespace-nowrap ${
                           doc.status === "draft"
                             ? "bg-yellow-100 text-yellow-800 border border-yellow-200"
                             : doc.status === "completed" ||
@@ -1047,7 +1135,7 @@ export default function DashboardPage() {
         <PartiesDialog
           open={showPartiesDialog}
           onOpenChange={setShowPartiesDialog}
-          parties={[]} // <= You'd pass the real data if you track uniqueParties
+          parties={filteredParties}
           searchQuery={partySearchQuery}
           onSearchChange={setPartySearchQuery}
           formatRelativeTime={formatRelativeTime}
