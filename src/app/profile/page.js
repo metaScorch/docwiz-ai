@@ -268,6 +268,44 @@ export default function ProfilePage() {
     }
   };
 
+  const handleDeleteLogo = async (e) => {
+    e.stopPropagation();
+    setIsUploading(true);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("No user found");
+
+      // Extract file name from URL
+      const fileUrl = new URL(logoUrl);
+      const filePath = fileUrl.pathname.split("/").slice(-2).join("/");
+
+      // Delete from storage
+      const { error: deleteError } = await supabase.storage
+        .from("logos")
+        .remove([filePath]);
+
+      if (deleteError) throw deleteError;
+
+      // Update registration to remove logo_url
+      const { error: updateError } = await supabase
+        .from("registrations")
+        .update({ logo_url: null })
+        .eq("user_id", user.id);
+
+      if (updateError) throw updateError;
+
+      setLogoUrl(null);
+      toast.success("Logo deleted successfully");
+    } catch (error) {
+      console.error("Error deleting logo:", error.message || error);
+      toast.error("Failed to delete logo");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -364,35 +402,39 @@ export default function ProfilePage() {
             <div
               {...getRootProps()}
               className={cn(
-                "mt-2 border-2 border-dashed rounded-lg p-4 max-w-[300px]",
+                "mt-2 border-2 border-dashed rounded-lg p-4 max-w-[300px] relative",
                 isDragActive && "border-primary bg-primary/5"
               )}
             >
               <input {...getInputProps()} />
               <div className="flex flex-col items-start gap-2">
                 {logoUrl ? (
-                  <div className="relative w-[100px]">
+                  <>
                     <Button
-                      variant="secondary"
+                      variant="destructive"
                       size="sm"
                       className="absolute -top-2 -right-2 h-8 w-8 p-0 rounded-full"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setLogoUrl(null);
-                      }}
+                      onClick={handleDeleteLogo}
+                      disabled={isUploading}
                     >
-                      <ImageIcon className="h-4 w-4" />
+                      {isUploading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        "×"
+                      )}
                     </Button>
-                    <Image
-                      src={logoUrl}
-                      alt="Company Logo"
-                      width={100}
-                      height={33}
-                      className="rounded-lg"
-                      priority={true}
-                      unoptimized={false}
-                    />
-                  </div>
+                    <div className="w-[100px]">
+                      <Image
+                        src={logoUrl}
+                        alt="Company Logo"
+                        width={100}
+                        height={33}
+                        className="rounded-lg"
+                        priority={true}
+                        unoptimized={false}
+                      />
+                    </div>
+                  </>
                 ) : (
                   <>
                     <Upload className="h-8 w-8 text-muted-foreground" />
@@ -403,6 +445,9 @@ export default function ProfilePage() {
                 )}
               </div>
             </div>
+            <p className="text-sm text-muted-foreground mt-2">
+              You can use this logo in your document headers
+            </p>
           </div>
 
           <div className="grid gap-6">
