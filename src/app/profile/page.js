@@ -52,16 +52,16 @@ import {
 } from "@/components/ui/dialog";
 
 function getCroppedImg(image, crop) {
-  const canvas = document.createElement("canvas");
+  const cropCanvas = document.createElement("canvas");
   const scaleX = image.naturalWidth / image.width;
   const scaleY = image.naturalHeight / image.height;
-  canvas.width = crop.width;
-  canvas.height = crop.width / 4; // Force 4:1 aspect ratio
-  const ctx = canvas.getContext("2d");
+  cropCanvas.width = crop.width;
+  cropCanvas.height = crop.width / 4;
+  const ctx = cropCanvas.getContext("2d");
 
   const pixelRatio = window.devicePixelRatio;
-  canvas.width = crop.width * pixelRatio;
-  canvas.height = (crop.width / 4) * pixelRatio;
+  cropCanvas.width = crop.width * pixelRatio;
+  cropCanvas.height = (crop.width / 4) * pixelRatio;
   ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
   ctx.imageSmoothingQuality = "high";
 
@@ -82,8 +82,27 @@ function getCroppedImg(image, crop) {
     crop.width / 4
   );
 
+  const resizeCanvas = document.createElement("canvas");
+  resizeCanvas.width = 120;
+  resizeCanvas.height = 30;
+  const resizeCtx = resizeCanvas.getContext("2d");
+  resizeCtx.imageSmoothingEnabled = true;
+  resizeCtx.imageSmoothingQuality = "high";
+
+  resizeCtx.drawImage(
+    cropCanvas,
+    0,
+    0,
+    cropCanvas.width,
+    cropCanvas.height,
+    0,
+    0,
+    120,
+    30
+  );
+
   return new Promise((resolve) => {
-    canvas.toBlob(
+    resizeCanvas.toBlob(
       (blob) => {
         resolve(blob);
       },
@@ -177,15 +196,6 @@ export default function ProfilePage() {
           registration_type: registration.registration_type || "",
           domain: registration.domain || "",
           description: registration.description || "",
-          country_name: registration.country_name || "",
-          state_name: registration.state_name || "",
-          city_name: registration.city_name || "",
-          address_line1: registration.address_line1 || "",
-          address_line2: registration.address_line2 || "",
-          postal_code: registration.postal_code || "",
-          phone_number: registration.phone_number || "",
-          email: registration.email || "",
-          fax_number: registration.fax_number || "",
         });
 
         setSignatoryType(
