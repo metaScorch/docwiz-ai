@@ -16,6 +16,11 @@ import { useState } from "react";
 export default function Sidebar({ documentValues, onValueChange }) {
   const [openCalendars, setOpenCalendars] = useState({});
 
+  const totalFields = documentValues ? Object.keys(documentValues).length : 0;
+  const filledFields = documentValues
+    ? Object.values(documentValues).filter((field) => field.value).length
+    : 0;
+
   const hasValues = documentValues && Object.keys(documentValues).length > 0;
 
   if (!hasValues) {
@@ -139,6 +144,13 @@ export default function Sidebar({ documentValues, onValueChange }) {
         <p className="text-sm text-muted-foreground">
           Fill in the values for the placeholders in your document
         </p>
+        <div className="mt-2 text-sm">
+          <span
+            className={`font-medium ${filledFields === totalFields ? "text-green-500" : "text-amber-500"}`}
+          >
+            {filledFields}/{totalFields} fields completed
+          </span>
+        </div>
       </div>
 
       <ScrollArea className="h-[calc(100vh-10rem)]">

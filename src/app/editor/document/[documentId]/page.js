@@ -31,6 +31,7 @@ export default function EditorPage({ params }) {
   });
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [currentFeature, setCurrentFeature] = useState(null);
+  const [documentValues, setDocumentValues] = useState(null);
 
   const formatRelativeTime = (dateString) => {
     return formatDistanceToNow(new Date(dateString), { addSuffix: true });
@@ -351,8 +352,15 @@ export default function EditorPage({ params }) {
               onClick={() =>
                 router.push(`/editor/document/${documentId}/preview`)
               }
+              disabled={
+                !documentValues ||
+                Object.values(documentValues).some((field) => !field.value)
+              }
             >
-              Next
+              {!documentValues ||
+              Object.values(documentValues).some((field) => !field.value)
+                ? "Fill all fields to continue"
+                : "Next"}
             </Button>
           </div>
         </div>
@@ -372,6 +380,8 @@ export default function EditorPage({ params }) {
         onUpdateFeatureCount={updateFeatureCount}
         setCurrentFeature={setCurrentFeature}
         setShowUpgradeModal={setShowUpgradeModal}
+        documentValues={documentValues}
+        onUpdateDocumentValues={setDocumentValues}
       />
 
       <div className="mt-4 text-sm text-muted-foreground bg-muted p-3 rounded-md">
