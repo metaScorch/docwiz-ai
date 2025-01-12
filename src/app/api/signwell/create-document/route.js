@@ -3,13 +3,20 @@ import { NextResponse } from "next/server";
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { fileUrl, documentName, signers } = body;
+    const { fileUrl, documentName, signers, sender } = body;
+
+    // Create message based on sender availability
+    const message =
+      sender?.name && sender?.email
+        ? `${sender.name} (${sender.email}) sent you a document for signing.`
+        : "You've received a document for signing.";
 
     // Log the request for debugging
     console.log("SignWell Request:", {
       fileUrl,
       documentName,
       signers,
+      sender,
     });
 
     // Log the full signers data to debug fields
@@ -53,8 +60,8 @@ export async function POST(request) {
     });
 
     if (!hasValidFields) {
-      throw new Error(
-        "At least one signer must have valid signature fields with page, x, and y coordinates"
+      console.log(
+        "No signature fields specified - using signature page instead"
       );
     }
 
@@ -68,14 +75,14 @@ export async function POST(request) {
       ],
       name: documentName,
       subject: documentName,
-      message: "Please sign this document",
+      message: message,
       recipients: signers.map((signer, index) => ({
         id: `recipient_${index + 1}`,
         name: signer.name,
         email: signer.email,
         order: index + 1,
         role: "signer",
-        message: "Please sign this document",
+        message: message,
       })),
       draft: false,
       reminders: true,
