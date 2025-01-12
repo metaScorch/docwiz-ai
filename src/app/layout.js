@@ -2,8 +2,8 @@ import localFont from "next/font/local";
 import "./globals.css";
 import { Toaster } from "sonner";
 import { Analytics } from "@vercel/analytics/react";
-import { PHProvider } from "@/lib/posthog";
 import PostHogPageview from "@/components/PostHogPageview";
+import { PostHogProvider } from "@/components/providers/PostHogProvider";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -27,12 +27,12 @@ export default function RootLayout({ children }) {
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <PHProvider>
+        <PostHogProvider>
           {children}
           <PostHogPageview />
           <Toaster />
           <Analytics />
-        </PHProvider>
+        </PostHogProvider>
       </body>
     </html>
   );

@@ -76,9 +76,10 @@ export default function Editor({
   setCurrentFeature,
   setShowUpgradeModal,
   hasActiveSubscription,
+  documentValues,
+  onUpdateDocumentValues,
 }) {
   const [isMounted, setIsMounted] = useState(false);
-  const [documentValues, setDocumentValues] = useState({});
   const [selection, setSelection] = useState(null);
   const [popupPosition, setPopupPosition] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -217,14 +218,14 @@ export default function Editor({
         }
 
         console.log("Final placeholder values:", placeholders);
-        setDocumentValues(placeholders);
+        onUpdateDocumentValues(placeholders);
       };
 
       fetchDocumentValues();
     } else if (content) {
       // If no documentId but we have content, just extract placeholders
       const placeholders = extractPlaceholders(content);
-      setDocumentValues(placeholders);
+      onUpdateDocumentValues(placeholders);
     }
   }, [documentId, content, extractPlaceholders, supabase]);
 
@@ -280,7 +281,7 @@ export default function Editor({
         value: value,
       },
     };
-    setDocumentValues(newValues);
+    onUpdateDocumentValues(newValues);
 
     // Update database if we have a document ID
     if (documentId) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -9,6 +9,8 @@ import {
   Check,
   ChevronsUpDown,
   UserCircle,
+  Image as ImageIcon,
+  Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,7 +40,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { posthog } from "@/lib/posthog";
+import { usePostHog } from "posthog-js/react";
+import { useDropzone } from "react-dropzone";
+import ReactCrop from "react-image-crop";
+import "react-image-crop/dist/ReactCrop.css";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -58,13 +69,24 @@ export default function ProfilePage() {
   });
   const [userEmail, setUserEmail] = useState("");
   const [signatoryType, setSignatoryType] = useState("myself");
+  const [logoUrl, setLogoUrl] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [showCropDialog, setShowCropDialog] = useState(false);
+  const [cropImage, setCropImage] = useState(null);
+  const [crop, setCrop] = useState({ unit: "%", width: 100, aspect: 3 / 1 });
+  const posthog = usePostHog();
 
   useEffect(() => {
+    let mounted = true;
+
     async function loadProfile() {
       try {
         const {
           data: { user },
         } = await supabase.auth.getUser();
+
+        if (!mounted) return;
+
         if (!user) {
           router.push("/sign-in");
           return;
@@ -80,7 +102,10 @@ export default function ProfilePage() {
 
         if (error) throw error;
 
+        if (!mounted) return;
+
         setProfile(registration);
+        setLogoUrl(registration.logo_url);
         setFormData({
           entity_name: registration.entity_name || "",
           industry: registration.industry || "",
@@ -96,14 +121,22 @@ export default function ProfilePage() {
           registration.authorized_signatory === "me" ? "myself" : "someone_else"
         );
       } catch (error) {
-        console.error("Error loading profile:", error);
-        toast.error("Failed to load profile. Please try again.");
+        if (mounted) {
+          console.error("Error loading profile:", error);
+          toast.error("Failed to load profile. Please try again.");
+        }
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     }
 
     loadProfile();
+
+    return () => {
+      mounted = false;
+    };
   }, [router, supabase]);
 
   const handleSave = async () => {
@@ -126,14 +159,17 @@ export default function ProfilePage() {
       setProfile({ ...profile, ...formData });
       setEditing(false);
       toast.success("Profile updated successfully.");
-      posthog.capture("profile_updated", {
-        updated_fields: Object.keys(formData).filter(
-          (key) => formData[key] !== profile[key]
-        ),
-        has_entity_name: !!formData.entity_name,
-        industry: formData.industry,
-        jurisdiction: formData.jurisdiction,
-      });
+
+      if (posthog) {
+        posthog.capture("profile_updated", {
+          updated_fields: Object.keys(formData).filter(
+            (key) => formData[key] !== profile[key]
+          ),
+          has_entity_name: !!formData.entity_name,
+          industry: formData.industry,
+          jurisdiction: formData.jurisdiction,
+        });
+      }
     } catch (error) {
       console.error("Error updating profile:", error);
       toast.error("Failed to update profile. Please try again.");
@@ -149,6 +185,124 @@ export default function ProfilePage() {
       setFormData({ ...formData, industry: value });
     } else {
       setFormData({ ...formData, industry: value.toLowerCase() });
+    }
+  };
+
+  const onDrop = useCallback(async (acceptedFiles) => {
+    const file = acceptedFiles[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setCropImage(reader.result);
+        setShowCropDialog(true);
+      };
+      reader.readAsDataURL(file);
+    }
+  }, []);
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      "image/*": [".jpeg", ".jpg", ".png", ".gif"],
+    },
+    maxFiles: 1,
+    multiple: false,
+  });
+
+  const handleCropComplete = async (croppedImage) => {
+    setIsUploading(true);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("No user found");
+
+      // Convert base64 to blob
+      const response = await fetch(croppedImage);
+      const blob = await response.blob();
+
+      // Create a unique file path including user ID for better organization
+      const fileExt = "png";
+      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+
+      // Upload to Supabase Storage
+      const { data, error: uploadError } = await supabase.storage
+        .from("logos")
+        .upload(fileName, blob, {
+          contentType: "image/png",
+          upsert: true,
+        });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      // Get public URL
+      const {
+        data: { publicUrl },
+        error: urlError,
+      } = supabase.storage.from("logos").getPublicUrl(fileName);
+
+      if (urlError) {
+        throw urlError;
+      }
+
+      // Update registration with new logo URL
+      const { error: updateError } = await supabase
+        .from("registrations")
+        .update({ logo_url: publicUrl })
+        .eq("user_id", user.id);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      setLogoUrl(publicUrl);
+      setShowCropDialog(false);
+      toast.success("Logo uploaded successfully");
+    } catch (error) {
+      console.error("Error uploading logo:", error.message || error);
+      toast.error(error.message || "Failed to upload logo");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleDeleteLogo = async (e) => {
+    e.stopPropagation();
+    setIsUploading(true);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("No user found");
+
+      // Extract file name from URL
+      const fileUrl = new URL(logoUrl);
+      const filePath = fileUrl.pathname.split("/").slice(-2).join("/");
+
+      // Delete from storage
+      const { error: deleteError } = await supabase.storage
+        .from("logos")
+        .remove([filePath]);
+
+      if (deleteError) throw deleteError;
+
+      // Update registration to remove logo_url
+      const { error: updateError } = await supabase
+        .from("registrations")
+        .update({ logo_url: null })
+        .eq("user_id", user.id);
+
+      if (updateError) throw updateError;
+
+      setLogoUrl(null);
+      toast.success("Logo deleted successfully");
+    } catch (error) {
+      console.error("Error deleting logo:", error.message || error);
+      toast.error("Failed to delete logo");
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -243,6 +397,59 @@ export default function ProfilePage() {
           <p className="text-sm text-muted-foreground">{userEmail}</p>
         </CardHeader>
         <CardContent className="space-y-6 pt-6">
+          <div className="mb-6">
+            <Label className="text-sm font-medium">Company Logo</Label>
+            <div
+              {...getRootProps()}
+              className={cn(
+                "mt-2 border-2 border-dashed rounded-lg p-4 max-w-[300px] relative",
+                isDragActive && "border-primary bg-primary/5"
+              )}
+            >
+              <input {...getInputProps()} />
+              <div className="flex flex-col items-start gap-2">
+                {logoUrl ? (
+                  <>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="absolute -top-2 -right-2 h-8 w-8 p-0 rounded-full"
+                      onClick={handleDeleteLogo}
+                      disabled={isUploading}
+                    >
+                      {isUploading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        "×"
+                      )}
+                    </Button>
+                    <div className="w-[100px]">
+                      <Image
+                        src={logoUrl}
+                        alt="Company Logo"
+                        width={100}
+                        height={33}
+                        className="rounded-lg"
+                        priority={true}
+                        unoptimized={false}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-8 w-8 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">
+                      Drag & drop your logo here or click to select
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground mt-2">
+              You can use this logo in your document headers
+            </p>
+          </div>
+
           <div className="grid gap-6">
             {Object.entries(formData).map(([key, value]) => {
               if (key === "authorized_signatory") {
@@ -482,6 +689,47 @@ export default function ProfilePage() {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={showCropDialog} onOpenChange={setShowCropDialog}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Crop Logo</DialogTitle>
+          </DialogHeader>
+          {cropImage && (
+            <div className="space-y-4">
+              <ReactCrop
+                crop={crop}
+                onChange={setCrop}
+                aspect={3 / 1}
+                className="max-w-full"
+              >
+                <img src={cropImage} alt="Crop" style={{ maxWidth: "100%" }} />
+              </ReactCrop>
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowCropDialog(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => handleCropComplete(cropImage)}
+                  disabled={isUploading}
+                >
+                  {isUploading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    "Save"
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
