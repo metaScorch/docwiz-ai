@@ -511,7 +511,7 @@ export default function PreviewPage({ params }) {
               variant="outline"
               className="px-6"
             >
-              Generate PDF
+              Download PDF
             </Button>
             <Button
               onClick={handleSendForSigning}

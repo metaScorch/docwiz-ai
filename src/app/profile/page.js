@@ -97,8 +97,8 @@ function getCroppedImg(image, crop) {
     cropCanvas.height,
     0,
     0,
-    120,
-    30
+    140,
+    35
   );
 
   return new Promise((resolve) => {
