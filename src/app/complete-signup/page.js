@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import OrganizationTypeStep from "../components/OrganizationTypeStep";
 import BusinessEntitySetupStep from "../components/BusinessEntitySetupStep";
@@ -10,8 +10,9 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import Image from "next/image";
 
-export default function CompleteSignupPage() {
+function CompleteSignupContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClientComponentClient();
   const [currentStep, setCurrentStep] = useState(0);
   const [registrationId, setRegistrationId] = useState(null);
@@ -92,7 +93,7 @@ export default function CompleteSignupPage() {
     }
   };
 
-  const totalSteps = 2; // Only org type and business setup
+  const totalSteps = 2;
   const progress = ((currentStep + 1) / totalSteps) * 100;
 
   const renderCurrentStep = () => {
@@ -150,5 +151,13 @@ export default function CompleteSignupPage() {
         <CardContent>{renderCurrentStep()}</CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function CompleteSignupPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <CompleteSignupContent />
+    </Suspense>
   );
 }

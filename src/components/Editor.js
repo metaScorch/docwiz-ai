@@ -21,8 +21,10 @@ import ChangePreview from "./ChangePreview";
 import { Wand2 } from "lucide-react";
 import { posthog } from "@/lib/posthog";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
+import NextImage from "next/image";
 import { Loader2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import ImageExtension from "@tiptap/extension-image";
 
 // Create a new lowlight instance with common languages
 const lowlight = createLowlight(common);
@@ -78,6 +80,10 @@ export default function Editor({
   hasActiveSubscription,
   documentValues,
   onUpdateDocumentValues,
+  headerContent,
+  displayHeader,
+  onHeaderChange,
+  onDisplayHeaderChange,
 }) {
   const [isMounted, setIsMounted] = useState(false);
   const [selection, setSelection] = useState(null);
@@ -127,11 +133,201 @@ export default function Editor({
     [documentValues]
   );
 
+  // Add this function to handle header changes with proper Markdown parsing
+  const handleHeaderChange = (newHeaderContent) => {
+    console.log("New raw header content:", newHeaderContent);
+
+    // Ensure proper line breaks and Markdown formatting
+    const formattedHeader = newHeaderContent
+      .replace(/!\[(.*?)\]\((.*?)\)/, (match) => `\n\n${match}\n\n`) // Add breaks around images
+      .replace(/(#{1,6} .+)/, (match) => `\n${match}\n\n`) // Add breaks around headings
+      .replace(/(\n{3,})/g, "\n\n") // Normalize multiple line breaks
+      .trim();
+
+    console.log("Formatted header content:", formattedHeader);
+
+    if (onHeaderChange) {
+      onHeaderChange(formattedHeader);
+    }
+  };
+
+  // Add function to generate default letterhead from registration
+  const generateDefaultLetterhead = (registration) => {
+    console.log(
+      "Generating default letterhead from registration:",
+      registration
+    );
+    if (!registration) return "";
+
+    let letterhead = "";
+
+    // Logo at the top, left-aligned
+    if (registration.logo_url) {
+      letterhead += `<div style="text-align: left">![${registration.entity_name || "Company Logo"}](${registration.logo_url})</div>\n\n`;
+    }
+
+    // Company name
+    letterhead += `## ${registration.entity_name || ""}\n\n`;
+
+    // Address
+    if (registration.address_line1) {
+      letterhead += `${registration.address_line1} ${registration.city_name || ""}, ${registration.state_name || ""} ${registration.postal_code || ""}\n\n`;
+    }
+
+    // Contact info
+    const contactInfo = [];
+    if (registration.phone_number)
+      contactInfo.push(`+${registration.phone_number.replace(/\D/g, "")}`);
+    if (registration.email) contactInfo.push(registration.email);
+
+    if (contactInfo.length > 0) {
+      letterhead += `${contactInfo.join(" | ")}\n\n`;
+    }
+
+    // // Single separator line with no extra newlines
+    // letterhead += "---";
+
+    console.log("Generated letterhead content:", letterhead);
+    return letterhead;
+  };
+
+  // Fetch registration data and set default letterhead
+  useEffect(() => {
+    const fetchRegistration = async () => {
+      console.log(
+        "Fetching registration. Current headerContent:",
+        headerContent
+      );
+      console.log("Display header status:", displayHeader);
+
+      if (!documentId || headerContent) {
+        console.log("Skipping registration fetch:", {
+          hasDocumentId: !!documentId,
+          hasHeaderContent: !!headerContent,
+        });
+        return;
+      }
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.user) {
+        console.log("No user session found");
+        return;
+      }
+
+      // Fetch all registration fields we need for the letterhead
+      const { data: registration, error } = await supabase
+        .from("registrations")
+        .select(
+          `
+          id,
+          entity_name,
+          logo_url,
+          address_line1,
+          address_line2,
+          city_name,
+          state_name,
+          postal_code,
+          phone_number,
+          email,
+          fax_number
+        `
+        )
+        .eq("user_id", session.user.id)
+        .single();
+
+      if (error) {
+        console.error("Error fetching registration:", error);
+        return;
+      }
+
+      console.log("Fetched registration data:", registration);
+
+      if (registration) {
+        // Format the address from individual fields
+        const formattedAddress = [
+          registration.address_line1,
+          registration.address_line2,
+        ]
+          .filter(Boolean)
+          .join("\n");
+
+        const formattedRegistration = {
+          ...registration,
+          // Combine address fields
+          address: formattedAddress,
+          city: registration.city_name,
+          state: registration.state_name,
+          zip: registration.postal_code,
+          phone: registration.phone_number,
+          // Keep other fields as is
+          email: registration.email,
+          entity_name: registration.entity_name,
+          logo_url: registration.logo_url,
+          fax: registration.fax_number,
+        };
+
+        const defaultLetterhead = generateDefaultLetterhead(
+          formattedRegistration
+        );
+        console.log("Setting default letterhead:", defaultLetterhead);
+        handleHeaderChange(defaultLetterhead);
+      }
+    };
+
+    fetchRegistration();
+  }, [documentId, supabase, headerContent, displayHeader]);
+
+  // Add this function to handle content updates while preserving cursor position
+  const updateEditorContent = (newContent) => {
+    if (!editor) return;
+
+    // Store current selection
+    const { from, to } = editor.state.selection;
+
+    // Get current cursor position relative to the start of the document
+    const currentPos = editor.state.selection.$head.pos;
+
+    // Check if we're in the header section
+    const isInHeader =
+      displayHeader &&
+      currentPos <
+        editor.state.doc
+          .textBetween(0, editor.state.doc.content.size)
+          .indexOf("---");
+
+    // Only update if content has changed
+    if (newContent !== editor.getHTML()) {
+      console.log("Updating editor content while preserving cursor");
+      editor.commands.setContent(newContent, false);
+
+      // Restore cursor position
+      if (isInHeader) {
+        // If in header, keep cursor in same relative position
+        editor.commands.setTextSelection(from);
+      } else {
+        // If in main content, adjust position to account for header
+        const headerOffset = displayHeader
+          ? editor.state.doc
+              .textBetween(0, editor.state.doc.content.size)
+              .indexOf("---") + 3
+          : 0;
+        editor.commands.setTextSelection(from + headerOffset);
+      }
+    }
+  };
+
   // Editor initialization
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        heading: { levels: [1, 2, 3, 4, 5, 6] },
+        heading: {
+          levels: [1, 2],
+          HTMLAttributes: {
+            class: "letterhead-heading",
+          },
+        },
         codeBlock: false,
       }),
       Placeholder.configure({
@@ -149,29 +345,49 @@ export default function Editor({
         html: true,
         transformPastedText: true,
         transformCopiedText: true,
+        breaks: true, // Enable line breaks
       }),
       PlaceholderHighlight,
+      ImageExtension.configure({
+        inline: false,
+        allowBase64: true,
+        HTMLAttributes: {
+          class: "letterhead-logo max-h-20 object-contain",
+        },
+      }),
     ],
-    content: replaceContentPlaceholders(content),
-    onUpdate: ({ editor }) => {
-      // Get the markdown content
+    content: displayHeader
+      ? `${headerContent}\n---\n${replaceContentPlaceholders(content)}`
+      : replaceContentPlaceholders(content),
+    onUpdate: ({ editor, transaction }) => {
+      // Only process if it's a content change
+      if (!transaction.docChanged) return;
+
+      console.log("Editor content updated");
       const markdown = editor.storage.markdown.getMarkdown();
 
-      // Replace any displayed values back to placeholders before saving
-      let processedMarkdown = markdown;
-      Object.entries(documentValues).forEach(([name, details]) => {
-        if (details.value) {
-          const value = details.value;
-          const placeholder = `{{${name}}}`;
-          processedMarkdown = processedMarkdown.replace(
-            new RegExp(value, "g"),
-            placeholder
-          );
-        }
-      });
+      if (displayHeader) {
+        console.log("Splitting content for header");
+        const [header, ...rest] = markdown.split("\n---\n");
 
-      if (onChange) {
-        onChange(processedMarkdown);
+        // Store current cursor position
+        const currentPos = editor.state.selection.$head.pos;
+        const isInHeader =
+          currentPos <
+          editor.state.doc
+            .textBetween(0, editor.state.doc.content.size)
+            .indexOf("---");
+
+        if (isInHeader) {
+          handleHeaderChange(header);
+        }
+
+        if (onChange) {
+          onChange(rest.join("\n---\n"));
+        }
+      } else if (onChange) {
+        console.log("Updating main content only");
+        onChange(markdown);
       }
     },
     editorProps: {
@@ -179,11 +395,23 @@ export default function Editor({
         class:
           "prose prose-sm max-w-none focus:outline-none" +
           " prose-headings:font-semibold" +
-          " prose-h1:text-3xl prose-h1:mb-4" +
-          " prose-h2:text-2xl prose-h2:mb-3" +
-          " prose-h3:text-xl prose-h3:mb-2" +
+          " prose-h2:text-xl prose-h2:mb-4" +
+          " prose-h3:text-lg prose-h3:mb-3" +
           " prose-p:text-base prose-p:leading-relaxed" +
           " prose-pre:text-sm",
+      },
+      handleDOMEvents: {
+        keydown: (view, event) => {
+          // Prevent default behavior for Enter key in headers
+          if (
+            event.key === "Enter" &&
+            view.state.selection.$head.parent.type.name === "heading"
+          ) {
+            event.preventDefault();
+            return true;
+          }
+          return false;
+        },
       },
     },
   });
@@ -490,19 +718,23 @@ export default function Editor({
   // Update editor content when documentValues change
   useEffect(() => {
     if (editor && content && documentValues) {
+      console.log("Content or values updated");
+
       const processedContent = replaceContentPlaceholders(content);
-      // Only update if the content is actually different
-      if (processedContent !== editor.getHTML()) {
-        // Store current selection
-        const { from, to } = editor.state.selection;
+      const fullContent = displayHeader
+        ? `${headerContent}\n---\n${processedContent}`
+        : processedContent;
 
-        editor.commands.setContent(processedContent, false);
-
-        // Restore selection
-        editor.commands.setTextSelection({ from, to });
-      }
+      updateEditorContent(fullContent);
     }
-  }, [documentValues, content, editor, replaceContentPlaceholders]);
+  }, [
+    documentValues,
+    content,
+    editor,
+    replaceContentPlaceholders,
+    headerContent,
+    displayHeader,
+  ]);
 
   // Track editor initialization
   useEffect(() => {
@@ -551,7 +783,7 @@ export default function Editor({
     return (
       <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <Image
+          <NextImage
             src="/logo.png"
             alt="DocWiz Logo"
             width={180}
@@ -591,6 +823,8 @@ export default function Editor({
       <Sidebar
         documentValues={documentValues}
         onValueChange={handlePlaceholderChange}
+        displayHeader={displayHeader}
+        onDisplayHeaderChange={onDisplayHeaderChange}
       />
       {previewChanges && (
         <ChangePreview

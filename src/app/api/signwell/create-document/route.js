@@ -66,7 +66,7 @@ export async function POST(request) {
     }
 
     const signwellPayload = {
-      test_mode: false,
+      test_mode: true,
       files: [
         {
           file_url: fileUrl,

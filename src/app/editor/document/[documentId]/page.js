@@ -32,6 +32,8 @@ export default function EditorPage({ params }) {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [currentFeature, setCurrentFeature] = useState(null);
   const [documentValues, setDocumentValues] = useState(null);
+  const [headerContent, setHeaderContent] = useState("");
+  const [displayHeader, setDisplayHeader] = useState(false);
 
   const formatRelativeTime = (dateString) => {
     return formatDistanceToNow(new Date(dateString), { addSuffix: true });
@@ -118,6 +120,8 @@ export default function EditorPage({ params }) {
         if (document) {
           setUserDocument(document);
           setContent(document.content);
+          setHeaderContent(document.header_content || "");
+          setDisplayHeader(document.display_header || false);
           // Only set feature counts if no active subscription
           if (!hasActiveSubscription) {
             setFeatureCounts({
@@ -274,6 +278,38 @@ export default function EditorPage({ params }) {
     setIsFormatting(false);
   };
 
+  const handleHeaderChange = async (newHeaderContent) => {
+    setHeaderContent(newHeaderContent);
+
+    const { error } = await supabase
+      .from("user_documents")
+      .update({
+        header_content: newHeaderContent,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", documentId);
+
+    if (error) {
+      console.error("Error updating header content:", error);
+    }
+  };
+
+  const handleDisplayHeaderChange = async (show) => {
+    setDisplayHeader(show);
+
+    const { error } = await supabase
+      .from("user_documents")
+      .update({
+        display_header: show,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", documentId);
+
+    if (error) {
+      console.error("Error updating display header:", error);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
@@ -382,6 +418,10 @@ export default function EditorPage({ params }) {
         setShowUpgradeModal={setShowUpgradeModal}
         documentValues={documentValues}
         onUpdateDocumentValues={setDocumentValues}
+        headerContent={headerContent}
+        displayHeader={displayHeader}
+        onHeaderChange={handleHeaderChange}
+        onDisplayHeaderChange={handleDisplayHeaderChange}
       />
 
       <div className="mt-4 text-sm text-muted-foreground bg-muted p-3 rounded-md">

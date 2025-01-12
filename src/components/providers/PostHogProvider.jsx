@@ -3,9 +3,9 @@
 import { PostHogProvider as Provider } from "posthog-js/react";
 import posthog from "posthog-js";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, Suspense } from "react";
 
-export function PostHogProvider({ children }) {
+function PostHogProviderContent({ children }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
@@ -22,4 +22,12 @@ export function PostHogProvider({ children }) {
   }, [pathname, searchParams]);
 
   return <Provider client={posthog}>{children}</Provider>;
+}
+
+export function PostHogProvider({ children }) {
+  return (
+    <Suspense>
+      <PostHogProviderContent>{children}</PostHogProviderContent>
+    </Suspense>
+  );
 } 
