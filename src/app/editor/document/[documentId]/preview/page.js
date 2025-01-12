@@ -12,8 +12,9 @@ import {
   generatePreviewPDF,
   generateSignwellPDF,
 } from "@/components/PDFGenerator";
-import { Loader2, PlusCircle, Trash2 } from "lucide-react";
+import { Loader2, PlusCircle, Trash2, ArrowLeft } from "lucide-react";
 import { posthog } from "@/lib/posthog";
+import Image from "next/image";
 
 export default function PreviewPage({ params }) {
   const documentId = use(params).documentId;
@@ -336,6 +337,16 @@ export default function PreviewPage({ params }) {
 
   return (
     <div className="container mx-auto p-6">
+      <div className="mb-8">
+        <div className="w-32 mb-4">
+          <Image src="/logo.png" alt="Logo" width={128} height={40} priority />
+        </div>
+        <Button variant="ghost" onClick={() => router.back()} className="px-6">
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back
+        </Button>
+      </div>
+
       <div className="grid grid-cols-2 gap-6">
         <div className="border rounded-lg p-4">
           <PDFPreview
@@ -456,13 +467,6 @@ export default function PreviewPage({ params }) {
           </Button>
 
           <div className="mt-8 space-x-4 flex justify-end">
-            <Button
-              variant="outline"
-              onClick={() => router.back()}
-              className="px-6"
-            >
-              Back
-            </Button>
             <Button
               onClick={handleSendForSigning}
               className="px-6 bg-blue-600 hover:bg-blue-700"

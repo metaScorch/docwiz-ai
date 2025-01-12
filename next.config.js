@@ -1,10 +1,13 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   webpack: (config) => {
-    config.resolve.alias.canvas = false
-    config.resolve.alias.encoding = false
-    return config
-  }
-}
+    config.resolve.alias.canvas = false;
+    config.resolve.alias.encoding = false;
+    return config;
+  },
+  images: {
+    domains: ["fwozyrnnemaubsihwdsg.supabase.co"],
+  },
+};
 
-module.exports = nextConfig
+module.exports = nextConfig;
