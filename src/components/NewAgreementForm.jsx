@@ -511,14 +511,14 @@ Example: I need a non-disclosure agreement for a freelance developer who will be
               </p>
             )}
           </div>
-        ) : userRegistration ? (
+        ) : userRegistration && (!businessContext || !businessContext.entity_name) ? (
           <div className="rounded-md bg-muted p-4">
             <div className="flex items-start">
               <Info className="h-5 w-5 text-muted-foreground mt-0.5" />
               <div className="ml-3">
-                <h3 className="text-sm font-medium">Missing Context. Enhance Your Agreement!</h3>
+                <h3 className="text-sm font-medium">Add Business Details</h3>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Enable smart customization by adding your business details. We'll automatically tailor agreements to your business profile.
+                  Enable smart customization by adding your business details. We'll automatically tailor agreements to your needs.
                 </p>
                 <Button
                   variant="link"
