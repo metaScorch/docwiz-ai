@@ -61,3 +61,135 @@ code {
   border-bottom-color: #374151;
   background-color: #111827;
 }
+
+/* Add these styles */
+.letterhead-logo {
+  max-width: 200px;
+  max-height: 80px;
+  margin: 1rem auto;
+  display: block;
+}
+
+.ProseMirror hr {
+  margin: 2rem 0;
+  border: none;
+  height: 2px;
+  background: linear-gradient(to right, transparent, #e5e7eb, transparent);
+}
+
+/* Letterhead container */
+.ProseMirror div[style*="text-align: center"] {
+  margin-bottom: 2rem;
+}
+
+/* Letterhead headings */
+.ProseMirror div[style*="text-align: center"] h1 {
+  margin-bottom: 0.5rem;
+  color: #1a1a1a;
+}
+
+/* Letterhead text */
+.ProseMirror div[style*="text-align: center"] p {
+  margin: 0.25rem 0;
+  line-height: 1.5;
+  color: #4b5563;
+}
+
+/* Letterhead specific styles */
+.ProseMirror h2.letterhead-heading {
+  font-size: 1.25rem !important;
+  font-weight: 500 !important;
+  margin: 1rem 0 0.5rem !important;
+}
+
+.ProseMirror div[style*="text-align: center"] {
+  margin-bottom: 1rem;
+}
+
+.ProseMirror div[style*="text-align: center"] img {
+  margin: 0 auto;
+  max-height: 60px;
+  width: auto;
+}
+
+/* Ensure proper spacing for letterhead elements */
+.ProseMirror p {
+  margin: 0.5rem 0 !important;
+}
+
+/* Style the separator line */
+.ProseMirror hr {
+  margin: 1rem 0;
+  border: none;
+  height: 1px;
+  background: #e5e7eb;
+  clear: both;
+}
+
+/* Letterhead layout */
+.ProseMirror div[style*="display: flex"] {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: start !important;
+  margin-bottom: 1rem;
+  gap: 2rem;
+}
+
+/* Left side content */
+.ProseMirror div[style*="text-align: left"] {
+  flex: 1;
+}
+
+.ProseMirror div[style*="text-align: left"] h2 {
+  margin-top: 0 !important;
+}
+
+/* Right side logo */
+.ProseMirror div[style*="text-align: right"] {
+  flex-shrink: 0;
+}
+
+.ProseMirror div[style*="text-align: right"] img {
+  max-height: 60px;
+  width: auto;
+}
+
+/* Separator line */
+.ProseMirror hr {
+  margin: 1rem 0;
+  border: none;
+  height: 1px;
+  background: #e5e7eb;
+  clear: both;
+}
+
+/* Letterhead styles */
+.ProseMirror img {
+  max-height: 60px;
+  width: auto;
+  margin: 0 0 1rem 0;
+  display: block;
+}
+
+.ProseMirror div[style*="text-align: left"] {
+  text-align: left !important;
+}
+
+.ProseMirror h2 {
+  font-size: 1.25rem !important;
+  font-weight: 500 !important;
+  margin: 0.5rem 0 !important;
+}
+
+.ProseMirror p {
+  margin: 0.25rem 0 !important;
+  line-height: 1.5;
+}
+
+/* Single separator line */
+.ProseMirror hr {
+  margin: 1rem 0;
+  border: none;
+  height: 1px;
+  background: #e5e7eb;
+}

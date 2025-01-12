@@ -177,6 +177,15 @@ export default function ProfilePage() {
           registration_type: registration.registration_type || "",
           domain: registration.domain || "",
           description: registration.description || "",
+          country_name: registration.country_name || "",
+          state_name: registration.state_name || "",
+          city_name: registration.city_name || "",
+          address_line1: registration.address_line1 || "",
+          address_line2: registration.address_line2 || "",
+          postal_code: registration.postal_code || "",
+          phone_number: registration.phone_number || "",
+          email: registration.email || "",
+          fax_number: registration.fax_number || "",
         });
 
         setSignatoryType(

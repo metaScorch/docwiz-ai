@@ -35,7 +35,16 @@ export default function PreviewPage({ params }) {
       // Fetch document
       const { data: document, error } = await supabase
         .from("user_documents")
-        .select("*")
+        .select(
+          `
+          *,
+          registrations (
+            id,
+            entity_name,
+            logo_url
+          )
+        `
+        )
         .eq("id", documentId)
         .single();
 
@@ -194,10 +203,12 @@ export default function PreviewPage({ params }) {
         return;
       }
 
-      // Update PDF generation to use generateSignwellPDF
+      // Update PDF generation to include header parameters
       const pdfBlob = await generateSignwellPDF(
         document.content,
-        document.placeholder_values
+        document.placeholder_values,
+        document.display_header,
+        document.header_content
       );
       if (!pdfBlob) throw new Error("PDF generation failed");
 
@@ -333,6 +344,32 @@ export default function PreviewPage({ params }) {
     }
   };
 
+  const handleGeneratePDF = async () => {
+    try {
+      const pdfBlob = await generatePreviewPDF(
+        document.content,
+        document.placeholder_values,
+        document.display_header,
+        document.header_content
+      );
+
+      // Use window.document instead of document
+      const url = window.URL.createObjectURL(pdfBlob);
+      const link = window.document.createElement("a");
+      link.href = url;
+      link.download = `${document.title || "document"}_preview.pdf`;
+      window.document.body.appendChild(link);
+      link.click();
+      window.document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast.success("PDF generated successfully!");
+    } catch (error) {
+      console.error("PDF Generation Error:", error);
+      toast.error("Failed to generate PDF");
+    }
+  };
+
   if (!document) return <div>Loading...</div>;
 
   return (
@@ -353,6 +390,8 @@ export default function PreviewPage({ params }) {
             content={document.content}
             placeholderValues={document.placeholder_values}
             signers={signers}
+            displayHeader={document.display_header}
+            headerContent={document.header_content}
           />
         </div>
 
@@ -467,6 +506,13 @@ export default function PreviewPage({ params }) {
           </Button>
 
           <div className="mt-8 space-x-4 flex justify-end">
+            <Button
+              onClick={handleGeneratePDF}
+              variant="outline"
+              className="px-6"
+            >
+              Generate PDF
+            </Button>
             <Button
               onClick={handleSendForSigning}
               className="px-6 bg-blue-600 hover:bg-blue-700"

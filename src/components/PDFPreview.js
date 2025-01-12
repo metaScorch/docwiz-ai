@@ -13,7 +13,13 @@ import {
 } from "lucide-react";
 import html2pdf from "html2pdf.js";
 
-export default function PDFPreview({ content, placeholderValues, signers }) {
+export default function PDFPreview({
+  content,
+  placeholderValues,
+  signers,
+  displayHeader,
+  headerContent,
+}) {
   const [processedContent, setProcessedContent] = useState("");
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -24,6 +30,11 @@ export default function PDFPreview({ content, placeholderValues, signers }) {
     if (!content || !placeholderValues) return;
 
     let processedText = content;
+
+    // Add header if displayHeader is true
+    if (displayHeader && headerContent) {
+      processedText = `${headerContent}\n---\n${processedText}`;
+    }
 
     // Ensure placeholderValues is an array and create the map
     const placeholderMap = Array.isArray(placeholderValues)
@@ -57,7 +68,7 @@ export default function PDFPreview({ content, placeholderValues, signers }) {
     });
 
     setProcessedContent(marked(processedText));
-  }, [content, placeholderValues]);
+  }, [content, placeholderValues, displayHeader, headerContent]);
 
   // Calculate total pages based on content height
   useEffect(() => {
@@ -103,7 +114,7 @@ export default function PDFPreview({ content, placeholderValues, signers }) {
           <title>Print Document</title>
           <style>
             @page {
-              margin: 20mm; /* Match the PDF margin setting */
+              margin: 20mm;
             }
             body { 
               margin: 0;
@@ -111,11 +122,84 @@ export default function PDFPreview({ content, placeholderValues, signers }) {
             }
             .preview-content {
               font-family: "Times New Roman", serif;
-              line-height: 1.8;
+              line-height: 1.6;
               color: #1a1a1a;
-              padding: 0 40px;
+              padding: 40px 40px 0 40px;
+              margin-top: 20px;
             }
-            /* Copy any other styles from your PDF that make it look good */
+            /* Logo style */
+            .preview-content img {
+              max-width: 100px;
+              height: auto;
+              margin: 0 0 0.75rem 0;
+              display: block;
+            }
+            /* Company name style */
+            .preview-content h2 {
+              font-size: 16px;
+              font-weight: 600;
+              margin: 0 0 0.5rem 0;
+              color: #1a1a1a;
+              line-height: 1.2;
+            }
+            /* Header contact info style */
+            .preview-content h2 ~ p {
+              margin: 0 !important;
+              text-align: left;
+              font-size: 10.5pt;
+              line-height: 1.1;
+              color: #1a1a1a;
+              font-weight: normal;
+            }
+            /* Header separator */
+            .preview-content hr {
+              margin: 1.5rem 0 2.5rem 0;
+              border: none;
+              height: 1px;
+              background: #000000;
+              opacity: 0.15;
+            }
+            /* Document title */
+            .preview-content h1 {
+              font-size: 16px;
+              font-weight: bold;
+              text-align: center;
+              margin: 3rem 0 2rem 0;
+              text-transform: uppercase;
+            }
+            /* Section headers */
+            .preview-content h3 {
+              font-size: 12pt;
+              font-weight: bold;
+              margin: 2.5rem 0 1rem 0;
+              page-break-after: avoid;
+            }
+            /* Paragraphs within sections */
+            .preview-content h3 + p {
+              margin-top: 0.5rem;
+            }
+            /* Main content paragraphs */
+            .preview-content p {
+              margin: 0 0 1rem 0;
+              text-align: justify;
+              font-size: 12pt;
+              line-height: 1.6;
+            }
+            /* Lists */
+            .preview-content ul,
+            .preview-content ol {
+              margin: 0.75rem 0;
+              padding-left: 1.5rem;
+            }
+            .preview-content li {
+              margin: 0.5rem 0;
+              font-size: 12pt;
+              line-height: 1.6;
+            }
+            /* Ensure proper section spacing */
+            .preview-content h3:not(:first-of-type) {
+              margin-top: 2.5rem;
+            }
           </style>
         </head>
         <body>
@@ -389,24 +473,26 @@ export default function PDFPreview({ content, placeholderValues, signers }) {
         }
 
         .preview-content h1 {
-          font-size: 24px;
+          font-size: 16px;
           font-weight: bold;
           text-align: center;
-          margin-bottom: 32px;
+          margin: 3rem 0 2rem 0;
           text-transform: uppercase;
         }
 
         .preview-content h2 {
-          font-size: 18px;
-          font-weight: bold;
-          margin-top: 24px;
-          margin-bottom: 16px;
+          font-size: 16px;
+          font-weight: 600;
+          margin: 0 0 0.5rem 0;
+          color: #1a1a1a;
+          line-height: 1.2;
         }
 
         .preview-content p {
-          margin-bottom: 16px;
+          margin: 0.75rem 0;
           text-align: justify;
           font-size: 12pt;
+          line-height: 1.6;
         }
 
         /* Hide scrollbar but keep functionality */
@@ -434,6 +520,217 @@ export default function PDFPreview({ content, placeholderValues, signers }) {
           .signature-page {
             break-before: page;
           }
+        }
+
+        /* Add/update these header-specific styles */
+        .preview-content img {
+          max-width: 100px;
+          height: auto;
+          margin: 0 0 0.75rem 0;
+          display: block;
+        }
+
+        /* Style the contact info paragraph */
+        .preview-content p {
+          margin: 0.75rem 0;
+          text-align: justify;
+          font-size: 12pt;
+          line-height: 1.6;
+        }
+
+        /* Add specific styles for the header section */
+        .preview-content hr {
+          margin: 1.5rem 0 2.5rem 0;
+          border: none;
+          height: 1px;
+          background: #000000;
+          opacity: 0.15;
+        }
+
+        /* Style specifically the header content before the separator */
+        .preview-content > :not(hr) + hr {
+          margin-top: 1rem;
+        }
+
+        .preview-content hr + * {
+          margin-top: 2rem;
+        }
+
+        /* Main content paragraphs (after the header) */
+        .preview-content hr ~ p {
+          margin: 1.5rem 0;
+          text-align: justify;
+          font-size: 12pt;
+          line-height: 1.8;
+        }
+
+        /* Header contact info style */
+        .preview-content h2 ~ p {
+          margin: 0 !important;
+          text-align: left;
+          font-size: 10.5pt;
+          line-height: 1.1;
+          color: #1a1a1a;
+          font-weight: normal;
+        }
+
+        /* Logo style */
+        .preview-content img {
+          max-width: 100px;
+          height: auto;
+          margin: 0 0 0.75rem 0;
+          display: block;
+        }
+
+        /* Company name style */
+        .preview-content h2 {
+          font-size: 16px;
+          font-weight: 600;
+          margin: 0 0 0.5rem 0;
+          color: #1a1a1a;
+          line-height: 1.2;
+        }
+
+        /* Header contact info style */
+        .preview-content h2 ~ p {
+          margin: 0 !important;
+          text-align: left;
+          font-size: 10.5pt;
+          line-height: 1.1;
+          color: #1a1a1a;
+          font-weight: normal;
+        }
+
+        /* Header separator line */
+        .preview-content hr {
+          margin: 1.5rem 0 2.5rem 0;
+          border: none;
+          height: 1px;
+          background: #000000;
+          opacity: 0.15;
+        }
+
+        /* Main content sections */
+        .preview-content h1 {
+          margin: 2.5rem 0 1.5rem 0;
+          font-size: 18px;
+          font-weight: bold;
+        }
+
+        /* Main content paragraphs */
+        .preview-content hr ~ p {
+          margin: 1.5rem 0;
+          text-align: justify;
+          font-size: 12pt;
+          line-height: 1.8;
+        }
+
+        /* Add spacing between sections */
+        .preview-content hr ~ h1 + p {
+          margin-top: 1.5rem;
+        }
+
+        /* Section headers (like "1. Purpose") */
+        .preview-content h3 {
+          font-size: 12pt;
+          font-weight: bold;
+          margin: 2rem 0 1rem 0;
+        }
+
+        /* List items (for bullet points) */
+        .preview-content ul,
+        .preview-content ol {
+          margin: 0.5rem 0;
+          padding-left: 1.5rem;
+        }
+
+        .preview-content li {
+          margin: 0.5rem 0;
+          font-size: 12pt;
+          line-height: 1.6;
+        }
+
+        @media print {
+          /* ... existing print styles ... */
+        }
+
+        /* Logo and header styles remain the same */
+        .preview-content img {
+          max-width: 100px;
+          height: auto;
+          margin: 0 0 0.75rem 0;
+          display: block;
+        }
+
+        /* Document title style */
+        .preview-content h1 {
+          font-size: 16px;
+          font-weight: bold;
+          text-align: center;
+          margin: 3rem 0 2rem 0;
+          text-transform: uppercase;
+        }
+
+        /* Numbered sections (like "7. No Warranty") */
+        .preview-content h3 {
+          font-size: 12pt;
+          font-weight: bold;
+          margin: 2.5rem 0 1rem 0; /* Increased top margin */
+          page-break-after: avoid; /* Prevent section header orphans */
+        }
+
+        /* Paragraphs within sections */
+        .preview-content h3 + p {
+          margin-top: 0.5rem; /* Reduced space after section title */
+        }
+
+        /* Main content paragraphs */
+        .preview-content p {
+          margin: 0 0 1rem 0; /* Adjusted paragraph spacing */
+          text-align: justify;
+          font-size: 12pt;
+          line-height: 1.6;
+        }
+
+        /* List items */
+        .preview-content ul,
+        .preview-content ol {
+          margin: 0.75rem 0;
+          padding-left: 1.5rem;
+        }
+
+        .preview-content li {
+          margin: 0.5rem 0;
+          font-size: 12pt;
+          line-height: 1.6;
+        }
+
+        /* Header specific styles */
+        .preview-content h2 ~ p {
+          margin: 0 !important;
+          text-align: left;
+          font-size: 10.5pt;
+          line-height: 1.1;
+          color: #1a1a1a;
+          font-weight: normal;
+        }
+
+        /* Header separator */
+        .preview-content hr {
+          margin: 1.5rem 0 2.5rem 0;
+          border: none;
+          height: 1px;
+          background: #000000;
+          opacity: 0.15;
+        }
+
+        /* Ensure proper spacing between sections */
+        .preview-content h3:not(:first-of-type) {
+          margin-top: 2.5rem; /* Consistent spacing between sections */
+        }
+
+        @media print {
+          /* ... existing print styles ... */
         }
       `}</style>
     </div>
