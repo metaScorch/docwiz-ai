@@ -1,7 +1,7 @@
 "use client";
 
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -51,6 +51,48 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
+function getCroppedImg(image, crop) {
+  const canvas = document.createElement("canvas");
+  const scaleX = image.naturalWidth / image.width;
+  const scaleY = image.naturalHeight / image.height;
+  canvas.width = crop.width;
+  canvas.height = crop.width / 4; // Force 4:1 aspect ratio
+  const ctx = canvas.getContext("2d");
+
+  const pixelRatio = window.devicePixelRatio;
+  canvas.width = crop.width * pixelRatio;
+  canvas.height = (crop.width / 4) * pixelRatio;
+  ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+  ctx.imageSmoothingQuality = "high";
+
+  const sourceX = crop.x * scaleX;
+  const sourceY = crop.y * scaleY;
+  const sourceWidth = crop.width * scaleX;
+  const sourceHeight = (crop.width / 4) * scaleY;
+
+  ctx.drawImage(
+    image,
+    sourceX,
+    sourceY,
+    sourceWidth,
+    sourceHeight,
+    0,
+    0,
+    crop.width,
+    crop.width / 4
+  );
+
+  return new Promise((resolve) => {
+    canvas.toBlob(
+      (blob) => {
+        resolve(blob);
+      },
+      "image/png",
+      1
+    );
+  });
+}
+
 export default function ProfilePage() {
   const router = useRouter();
   const supabase = createClientComponentClient();
@@ -59,13 +101,25 @@ export default function ProfilePage() {
   const [editing, setEditing] = useState(false);
   const [formData, setFormData] = useState({
     entity_name: "",
+    registration_type: "",
     industry: "",
     jurisdiction: "",
+    description: "",
+    domain: "",
+
+    country_name: "",
+    state_name: "",
+    city_name: "",
+    address_line1: "",
+    address_line2: "",
+    postal_code: "",
+
+    phone_number: "",
+    email: "",
+    fax_number: "",
+
     authorized_signatory: "",
     signatory_email: "",
-    registration_type: "",
-    domain: "",
-    description: "",
   });
   const [userEmail, setUserEmail] = useState("");
   const [signatoryType, setSignatoryType] = useState("myself");
@@ -73,7 +127,15 @@ export default function ProfilePage() {
   const [isUploading, setIsUploading] = useState(false);
   const [showCropDialog, setShowCropDialog] = useState(false);
   const [cropImage, setCropImage] = useState(null);
-  const [crop, setCrop] = useState({ unit: "%", width: 100, aspect: 3 / 1 });
+  const [crop, setCrop] = useState({
+    unit: "px",
+    width: 400,
+    height: 100,
+    x: 0,
+    y: 0,
+  });
+  const [completedCrop, setCompletedCrop] = useState(null);
+  const imgRef = useRef(null);
   const posthog = usePostHog();
 
   useEffect(() => {
@@ -209,26 +271,28 @@ export default function ProfilePage() {
     multiple: false,
   });
 
-  const handleCropComplete = async (croppedImage) => {
+  const handleCropComplete = async () => {
     setIsUploading(true);
     try {
+      if (!completedCrop || !imgRef.current) {
+        throw new Error("Crop not complete");
+      }
+
+      const croppedBlob = await getCroppedImg(imgRef.current, completedCrop);
+      if (!croppedBlob) {
+        throw new Error("Failed to crop image");
+      }
+
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) throw new Error("No user found");
 
-      // Convert base64 to blob
-      const response = await fetch(croppedImage);
-      const blob = await response.blob();
+      const fileName = `${user.id}/${Date.now()}.png`;
 
-      // Create a unique file path including user ID for better organization
-      const fileExt = "png";
-      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
-
-      // Upload to Supabase Storage
       const { data, error: uploadError } = await supabase.storage
         .from("logos")
-        .upload(fileName, blob, {
+        .upload(fileName, croppedBlob, {
           contentType: "image/png",
           upsert: true,
         });
@@ -237,7 +301,6 @@ export default function ProfilePage() {
         throw uploadError;
       }
 
-      // Get public URL
       const {
         data: { publicUrl },
         error: urlError,
@@ -247,7 +310,6 @@ export default function ProfilePage() {
         throw urlError;
       }
 
-      // Update registration with new logo URL
       const { error: updateError } = await supabase
         .from("registrations")
         .update({ logo_url: publicUrl })
@@ -396,284 +458,414 @@ export default function ProfilePage() {
           </CardTitle>
           <p className="text-sm text-muted-foreground">{userEmail}</p>
         </CardHeader>
-        <CardContent className="space-y-6 pt-6">
-          <div className="mb-6">
-            <Label className="text-sm font-medium">Company Logo</Label>
-            <div
-              {...getRootProps()}
-              className={cn(
-                "mt-2 border-2 border-dashed rounded-lg p-4 max-w-[300px] relative",
-                isDragActive && "border-primary bg-primary/5"
-              )}
-            >
-              <input {...getInputProps()} />
-              <div className="flex flex-col items-start gap-2">
-                {logoUrl ? (
-                  <>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      className="absolute -top-2 -right-2 h-8 w-8 p-0 rounded-full"
-                      onClick={handleDeleteLogo}
-                      disabled={isUploading}
-                    >
-                      {isUploading ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        "×"
-                      )}
-                    </Button>
-                    <div className="w-[100px]">
-                      <Image
-                        src={logoUrl}
-                        alt="Company Logo"
-                        width={100}
-                        height={33}
-                        className="rounded-lg"
-                        priority={true}
-                        unoptimized={false}
-                      />
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <Upload className="h-8 w-8 text-muted-foreground" />
-                    <p className="text-sm text-muted-foreground">
-                      Drag & drop your logo here or click to select
-                    </p>
-                  </>
+        <CardContent className="space-y-8 pt-6">
+          <div className="space-y-6">
+            <h3 className="text-lg font-semibold text-primary">Company Logo</h3>
+            <div className="mb-6">
+              <div
+                {...getRootProps()}
+                className={cn(
+                  "mt-2 border-2 border-dashed rounded-lg p-4 max-w-[300px] relative",
+                  isDragActive && "border-primary bg-primary/5"
                 )}
-              </div>
-            </div>
-            <p className="text-sm text-muted-foreground mt-2">
-              You can use this logo in your document headers
-            </p>
-          </div>
-
-          <div className="grid gap-6">
-            {Object.entries(formData).map(([key, value]) => {
-              if (key === "authorized_signatory") {
-                return (
-                  <div key={key} className="space-y-4">
-                    <Label
-                      htmlFor={key}
-                      className="text-sm font-medium capitalize"
-                    >
-                      Authorized Signatory
-                    </Label>
-                    {editing ? (
-                      <div className="space-y-4">
-                        <div className="flex flex-col space-y-2">
-                          <div className="flex items-center space-x-2">
-                            <input
-                              type="radio"
-                              id="myself"
-                              name="signatoryType"
-                              value="myself"
-                              checked={signatoryType === "myself"}
-                              onChange={(e) => {
-                                setSignatoryType("myself");
-                                setFormData({
-                                  ...formData,
-                                  authorized_signatory: "me",
-                                  signatory_email: userEmail,
-                                });
-                              }}
-                              className="h-4 w-4 border-gray-300 text-primary focus:ring-primary"
-                            />
-                            <Label htmlFor="myself" className="text-sm">
-                              Myself
-                            </Label>
-                          </div>
-
-                          <div className="flex items-center space-x-2">
-                            <input
-                              type="radio"
-                              id="someone_else"
-                              name="signatoryType"
-                              value="someone_else"
-                              checked={signatoryType === "someone_else"}
-                              onChange={(e) => {
-                                setSignatoryType("someone_else");
-                                setFormData({
-                                  ...formData,
-                                  authorized_signatory: "",
-                                  signatory_email: "",
-                                });
-                              }}
-                              className="h-4 w-4 border-gray-300 text-primary focus:ring-primary"
-                            />
-                            <Label htmlFor="someone_else" className="text-sm">
-                              Someone else
-                            </Label>
-                          </div>
-                        </div>
-
-                        {signatoryType === "someone_else" && (
-                          <div className="space-y-4 pl-6">
-                            <div className="space-y-2">
-                              <Label
-                                htmlFor="signatory_name"
-                                className="text-sm"
-                              >
-                                Signatory Name
-                              </Label>
-                              <Input
-                                id="signatory_name"
-                                value={
-                                  formData.authorized_signatory === "me"
-                                    ? ""
-                                    : formData.authorized_signatory
-                                }
-                                onChange={(e) =>
-                                  setFormData({
-                                    ...formData,
-                                    authorized_signatory: e.target.value,
-                                  })
-                                }
-                                placeholder="Enter signatory name"
-                                className="max-w-md"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label
-                                htmlFor="signatory_email"
-                                className="text-sm"
-                              >
-                                Signatory Email
-                              </Label>
-                              <Input
-                                id="signatory_email"
-                                type="email"
-                                value={formData.signatory_email}
-                                onChange={(e) =>
-                                  setFormData({
-                                    ...formData,
-                                    signatory_email: e.target.value,
-                                  })
-                                }
-                                placeholder="Enter signatory email"
-                                className="max-w-md"
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="text-muted-foreground">
-                        {value === "me" ? (
-                          <span>Myself ({userEmail})</span>
+              >
+                <input {...getInputProps()} />
+                <div className="flex flex-col items-start gap-2">
+                  {logoUrl ? (
+                    <>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        className="absolute -top-2 -right-2 h-8 w-8 p-0 rounded-full"
+                        onClick={handleDeleteLogo}
+                        disabled={isUploading}
+                      >
+                        {isUploading ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
-                          <span>
-                            {value} ({formData.signatory_email})
-                          </span>
+                          "×"
                         )}
+                      </Button>
+                      <div className="w-[100px]">
+                        <Image
+                          src={logoUrl}
+                          alt="Company Logo"
+                          width={100}
+                          height={33}
+                          className="rounded-lg"
+                          priority={true}
+                          unoptimized={false}
+                        />
                       </div>
-                    )}
-                  </div>
-                );
-              }
-
-              if (key === "signatory_email") {
-                return null;
-              }
-
-              return (
-                <div key={key} className="space-y-2">
-                  <Label
-                    htmlFor={key}
-                    className="text-sm font-medium capitalize"
-                  >
-                    {key === "registration_type"
-                      ? "Organization Type"
-                      : key.replace("_", " ")}
-                  </Label>
-                  {editing ? (
-                    key === "jurisdiction" ? (
-                      <JurisdictionSearch
-                        value={value}
-                        onChange={handleJurisdictionChange}
-                        defaultValue={value || undefined}
-                      />
-                    ) : key === "industry" ? (
-                      <div className="flex flex-col gap-2">
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              role="combobox"
-                              className="w-full justify-between max-w-md"
-                            >
-                              {formData.industry ||
-                                "Select or enter industry..."}
-                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                            <Command>
-                              <CommandInput
-                                placeholder="Type or select industry..."
-                                value={formData.industry}
-                                onValueChange={(value) =>
-                                  setFormData({ ...formData, industry: value })
-                                }
-                              />
-                              <CommandEmpty>
-                                Press enter to use this industry
-                              </CommandEmpty>
-                              <CommandGroup>
-                                {industries.map((industry) => (
-                                  <CommandItem
-                                    key={industry}
-                                    value={industry}
-                                    onSelect={handleIndustrySelect}
-                                  >
-                                    <Check
-                                      className={cn(
-                                        "mr-2 h-4 w-4",
-                                        formData.industry === industry
-                                          ? "opacity-100"
-                                          : "opacity-0"
-                                      )}
-                                    />
-                                    {industry}
-                                  </CommandItem>
-                                ))}
-                              </CommandGroup>
-                            </Command>
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                    ) : key === "description" ? (
-                      <textarea
-                        id={key}
-                        value={value}
-                        onChange={(e) =>
-                          setFormData({ ...formData, [key]: e.target.value })
-                        }
-                        className="flex min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 max-w-md"
-                      />
-                    ) : (
-                      <Input
-                        id={key}
-                        value={value}
-                        onChange={(e) =>
-                          setFormData({ ...formData, [key]: e.target.value })
-                        }
-                        className="max-w-md"
-                      />
-                    )
+                    </>
                   ) : (
-                    <div className="text-muted-foreground">
-                      {value || "Not set"}
-                    </div>
+                    <>
+                      <Upload className="h-8 w-8 text-muted-foreground" />
+                      <p className="text-sm text-muted-foreground">
+                        Drag & drop your logo here or click to select
+                      </p>
+                    </>
                   )}
                 </div>
-              );
-            })}
+              </div>
+              <p className="text-sm text-muted-foreground mt-2">
+                You can use this logo in your document headers
+              </p>
+            </div>
           </div>
 
-          <Separator className="my-6" />
+          <Separator />
+
+          <div className="space-y-6">
+            <h3 className="text-lg font-semibold text-primary">
+              Company Details
+            </h3>
+            <div className="grid gap-6 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="entity_name">Entity Name</Label>
+                <Input
+                  id="entity_name"
+                  value={formData.entity_name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, entity_name: e.target.value })
+                  }
+                  disabled={!editing}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="registration_type">Organization Type</Label>
+                <Input
+                  id="registration_type"
+                  value={formData.registration_type}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      registration_type: e.target.value,
+                    })
+                  }
+                  disabled={!editing}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="jurisdiction">Jurisdiction</Label>
+                {editing ? (
+                  <JurisdictionSearch
+                    value={formData.jurisdiction}
+                    onChange={handleJurisdictionChange}
+                    defaultValue={formData.jurisdiction || undefined}
+                  />
+                ) : (
+                  <div className="text-muted-foreground">
+                    {formData.jurisdiction || "Not set"}
+                  </div>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="industry">Industry</Label>
+                {editing ? (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        className="w-full justify-between max-w-md"
+                      >
+                        {formData.industry || "Select or enter industry..."}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                      <Command>
+                        <CommandInput
+                          placeholder="Type or select industry..."
+                          value={formData.industry}
+                          onValueChange={(value) =>
+                            setFormData({ ...formData, industry: value })
+                          }
+                        />
+                        <CommandEmpty>
+                          Press enter to use this industry
+                        </CommandEmpty>
+                        <CommandGroup>
+                          {industries.map((industry) => (
+                            <CommandItem
+                              key={industry}
+                              value={industry}
+                              onSelect={handleIndustrySelect}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  formData.industry === industry
+                                    ? "opacity-100"
+                                    : "opacity-0"
+                                )}
+                              />
+                              {industry}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                ) : (
+                  <div className="text-muted-foreground">
+                    {formData.industry || "Not set"}
+                  </div>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="domain">Website</Label>
+                <Input
+                  id="domain"
+                  value={formData.domain}
+                  onChange={(e) =>
+                    setFormData({ ...formData, domain: e.target.value })
+                  }
+                  disabled={!editing}
+                  placeholder="example.com"
+                />
+              </div>
+              <div className="sm:col-span-2 space-y-2">
+                <Label htmlFor="description">Description</Label>
+                <textarea
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) =>
+                    setFormData({ ...formData, description: e.target.value })
+                  }
+                  disabled={!editing}
+                  className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                />
+              </div>
+            </div>
+          </div>
+
+          <Separator />
+
+          <div className="space-y-6">
+            <h3 className="text-lg font-semibold text-primary">Location</h3>
+            <div className="grid gap-6 sm:grid-cols-2">
+              <div className="sm:col-span-2 space-y-2">
+                <Label htmlFor="address_line1">Address Line 1</Label>
+                <Input
+                  id="address_line1"
+                  value={formData.address_line1}
+                  onChange={(e) =>
+                    setFormData({ ...formData, address_line1: e.target.value })
+                  }
+                  disabled={!editing}
+                  placeholder="Street address"
+                />
+              </div>
+              <div className="sm:col-span-2 space-y-2">
+                <Label htmlFor="address_line2">Address Line 2 (Optional)</Label>
+                <Input
+                  id="address_line2"
+                  value={formData.address_line2}
+                  onChange={(e) =>
+                    setFormData({ ...formData, address_line2: e.target.value })
+                  }
+                  disabled={!editing}
+                  placeholder="Suite, floor, etc."
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="city_name">City</Label>
+                <Input
+                  id="city_name"
+                  value={formData.city_name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, city_name: e.target.value })
+                  }
+                  disabled={!editing}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="state_name">State/Province</Label>
+                <Input
+                  id="state_name"
+                  value={formData.state_name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, state_name: e.target.value })
+                  }
+                  disabled={!editing}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="postal_code">Postal Code</Label>
+                <Input
+                  id="postal_code"
+                  value={formData.postal_code}
+                  onChange={(e) =>
+                    setFormData({ ...formData, postal_code: e.target.value })
+                  }
+                  disabled={!editing}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="country_name">Country</Label>
+                <Input
+                  id="country_name"
+                  value={formData.country_name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, country_name: e.target.value })
+                  }
+                  disabled={!editing}
+                />
+              </div>
+            </div>
+          </div>
+
+          <Separator />
+
+          <div className="space-y-6">
+            <h3 className="text-lg font-semibold text-primary">
+              Signatory Information
+            </h3>
+            <div className="space-y-4">
+              <div className="flex flex-col space-y-2">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    id="myself"
+                    name="signatoryType"
+                    value="myself"
+                    checked={signatoryType === "myself"}
+                    onChange={(e) => {
+                      setSignatoryType("myself");
+                      setFormData({
+                        ...formData,
+                        authorized_signatory: "me",
+                        signatory_email: userEmail,
+                      });
+                    }}
+                    className="h-4 w-4 border-gray-300 text-primary focus:ring-primary"
+                  />
+                  <Label htmlFor="myself" className="text-sm">
+                    Myself
+                  </Label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    id="someone_else"
+                    name="signatoryType"
+                    value="someone_else"
+                    checked={signatoryType === "someone_else"}
+                    onChange={(e) => {
+                      setSignatoryType("someone_else");
+                      setFormData({
+                        ...formData,
+                        authorized_signatory: "",
+                        signatory_email: "",
+                      });
+                    }}
+                    className="h-4 w-4 border-gray-300 text-primary focus:ring-primary"
+                  />
+                  <Label htmlFor="someone_else" className="text-sm">
+                    Someone else
+                  </Label>
+                </div>
+              </div>
+
+              {signatoryType === "someone_else" && (
+                <div className="space-y-4 pl-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="signatory_name" className="text-sm">
+                      Signatory Name
+                    </Label>
+                    <Input
+                      id="signatory_name"
+                      value={
+                        formData.authorized_signatory === "me"
+                          ? ""
+                          : formData.authorized_signatory
+                      }
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          authorized_signatory: e.target.value,
+                        })
+                      }
+                      placeholder="Enter signatory name"
+                      className="max-w-md"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="signatory_email" className="text-sm">
+                      Signatory Email
+                    </Label>
+                    <Input
+                      id="signatory_email"
+                      type="email"
+                      value={formData.signatory_email}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          signatory_email: e.target.value,
+                        })
+                      }
+                      placeholder="Enter signatory email"
+                      className="max-w-md"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <Separator />
+
+          <div className="space-y-6">
+            <h3 className="text-lg font-semibold text-primary">
+              Contact Information
+            </h3>
+            <div className="grid gap-6 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="phone_number">Phone Number</Label>
+                <Input
+                  id="phone_number"
+                  type="tel"
+                  value={formData.phone_number}
+                  onChange={(e) =>
+                    setFormData({ ...formData, phone_number: e.target.value })
+                  }
+                  disabled={!editing}
+                  placeholder="+1 (555) 000-0000"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Business Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) =>
+                    setFormData({ ...formData, email: e.target.value })
+                  }
+                  disabled={!editing}
+                  placeholder="contact@company.com"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="fax_number">Fax Number (Optional)</Label>
+                <Input
+                  id="fax_number"
+                  type="tel"
+                  value={formData.fax_number}
+                  onChange={(e) =>
+                    setFormData({ ...formData, fax_number: e.target.value })
+                  }
+                  disabled={!editing}
+                  placeholder="+1 (555) 000-0000"
+                />
+              </div>
+            </div>
+          </div>
+
+          <Separator />
 
           <div className="flex justify-end space-x-4">
             {editing ? (
@@ -693,17 +885,23 @@ export default function ProfilePage() {
       <Dialog open={showCropDialog} onOpenChange={setShowCropDialog}>
         <DialogContent className="max-w-xl">
           <DialogHeader>
-            <DialogTitle>Crop Logo</DialogTitle>
+            <DialogTitle>Crop Logo (4:1 ratio)</DialogTitle>
           </DialogHeader>
           {cropImage && (
             <div className="space-y-4">
               <ReactCrop
                 crop={crop}
-                onChange={setCrop}
-                aspect={3 / 1}
+                onChange={(c) => setCrop(c)}
+                onComplete={(c) => setCompletedCrop(c)}
+                aspect={4}
                 className="max-w-full"
               >
-                <img src={cropImage} alt="Crop" style={{ maxWidth: "100%" }} />
+                <img
+                  ref={imgRef}
+                  src={cropImage}
+                  alt="Crop"
+                  style={{ maxWidth: "100%" }}
+                />
               </ReactCrop>
               <div className="flex justify-end gap-2">
                 <Button
@@ -712,10 +910,7 @@ export default function ProfilePage() {
                 >
                   Cancel
                 </Button>
-                <Button
-                  onClick={() => handleCropComplete(cropImage)}
-                  disabled={isUploading}
-                >
+                <Button onClick={handleCropComplete} disabled={isUploading}>
                   {isUploading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
