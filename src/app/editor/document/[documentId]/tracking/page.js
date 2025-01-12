@@ -8,7 +8,7 @@ import SigningStatus from "./components/SigningStatus";
 import Timeline from "./components/Timeline";
 import DocumentPreview from "./components/DocumentPreview";
 import { formatDistanceToNow } from "date-fns";
-import { Loader2 } from "lucide-react";
+import { Loader2, ArrowLeft } from "lucide-react";
 import { trackDocumentEvent } from "@/lib/analytics";
 import { posthog } from "@/lib/posthog";
 
@@ -109,20 +109,28 @@ export default function TrackingPage({ params }) {
 
   return (
     <div className="container mx-auto p-6">
-      {/* Header Section */}
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-3xl font-bold">{document.title}</h1>
-          <div className="text-sm text-muted-foreground mt-2">
-            Created{" "}
-            {formatDistanceToNow(new Date(documentData.createdAt), {
-              addSuffix: true,
-            })}
-          </div>
-        </div>
-        <Button variant="outline" onClick={() => router.push("/dashboard")}>
+      {/* New Logo and Back Section */}
+      <div className="mb-8">
+        <img src="/logo.png" alt="DocWiz Logo" className="h-8 mb-4" />
+        <Button
+          variant="ghost"
+          onClick={() => router.push("/dashboard")}
+          className="flex items-center gap-2 mb-6"
+        >
+          <ArrowLeft className="h-4 w-4" />
           Back to Dashboard
         </Button>
+      </div>
+
+      {/* Header Section - Remove the old back button */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold">{document.title}</h1>
+        <div className="text-sm text-muted-foreground mt-2">
+          Created{" "}
+          {formatDistanceToNow(new Date(documentData.createdAt), {
+            addSuffix: true,
+          })}
+        </div>
       </div>
 
       {/* Main Content Grid */}

@@ -10,7 +10,7 @@ import { use } from "react";
 import LoadingModal from "@/components/LoadingModal";
 import { redirect } from "next/navigation";
 import { UpgradeModal } from "@/components/UpgradeModal";
-import { Loader2 } from "lucide-react";
+import { Loader2, ArrowLeft } from "lucide-react";
 import Image from "next/image";
 
 export default function EditorPage({ params }) {
@@ -297,6 +297,25 @@ export default function EditorPage({ params }) {
   // Only render the Editor if we have a document and it's in an editable state
   return (
     <div className="container mx-auto p-6">
+      <div className="flex flex-col mb-6 space-y-4">
+        <Image
+          src="/logo.png"
+          alt="DocWiz Logo"
+          width={120}
+          height={40}
+          priority
+          className="h-auto"
+        />
+        <Button
+          variant="ghost"
+          className="flex items-center space-x-2 w-fit"
+          onClick={() => router.push("/dashboard")}
+        >
+          <ArrowLeft className="h-4 w-4" />
+          <span>Back</span>
+        </Button>
+      </div>
+
       <div className="flex flex-col mb-6">
         <div className="flex items-center justify-between">
           {isEditingTitle ? (
@@ -328,9 +347,6 @@ export default function EditorPage({ params }) {
             </>
           )}
           <div className="space-x-4">
-            <Button variant="outline" onClick={() => router.back()}>
-              Back
-            </Button>
             <Button
               onClick={() =>
                 router.push(`/editor/document/${documentId}/preview`)
