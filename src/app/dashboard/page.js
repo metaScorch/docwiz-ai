@@ -47,6 +47,16 @@ import Link from "next/link";
 import { posthog } from "@/lib/posthog";
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 // Status filter definitions
 const STATUS_FILTERS = [
@@ -342,6 +352,21 @@ function SearchParamsHandler() {
   return null;
 }
 
+// Add this helper function before the return statement
+const formatIdealFor = (idealFor) => {
+  if (!idealFor) return "";
+
+  if (typeof idealFor === "string") {
+    try {
+      return JSON.parse(idealFor).join(", ");
+    } catch {
+      return idealFor;
+    }
+  }
+
+  return Array.isArray(idealFor) ? idealFor.join(", ") : idealFor;
+};
+
 export default function DashboardPage() {
   const router = useRouter();
   const supabase = createClientComponentClient();
@@ -366,6 +391,7 @@ export default function DashboardPage() {
   const [showSignedDocsDialog, setShowSignedDocsDialog] = useState(false);
   const [signedDocsSearchQuery, setSignedDocsSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("all");
+  const [templateFilter, setTemplateFilter] = useState("all"); // "all" or "my"
 
   // Limits, subscription checks, loading states
   const [showUpgrade, setShowUpgrade] = useState(false);
@@ -374,6 +400,9 @@ export default function DashboardPage() {
   const [loadingTemplateId, setLoadingTemplateId] = useState(null);
   const [isLoadingBilling, setIsLoadingBilling] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+
+  // Inside DashboardPage component, add this state:
+  const [templateToDelete, setTemplateToDelete] = useState(null);
 
   // On mount, fetch user session, registration, subscription, documents
   useEffect(() => {
@@ -580,12 +609,16 @@ export default function DashboardPage() {
   const fetchTemplates = async () => {
     setLoadingTemplates(true);
     try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      // Fetch both public templates and user's custom templates
       const { data, error } = await supabase
         .from("templates")
         .select("*, placeholder_values")
-        .eq("ai_gen_template", true)
+        .or(`is_public.eq.true,and(user_id.eq.${user.id},is_public.eq.false)`)
         .eq("is_active", true)
-        .eq("is_public", true)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -598,15 +631,21 @@ export default function DashboardPage() {
   };
 
   // Filter templates by name, description, etc.
-  const filteredTemplates = templates.filter((template) =>
-    Object.values({
+  const filteredTemplates = templates.filter((template) => {
+    // First apply the my/all filter
+    if (templateFilter === "my" && template.is_public) {
+      return false;
+    }
+
+    // Then apply the search filter
+    return Object.values({
       template_name: template.template_name,
       ideal_for: template.ideal_for,
       description: template.description,
     }).some((value) =>
       value?.toLowerCase().includes(templateSearchQuery.toLowerCase())
-    )
-  );
+    );
+  });
 
   // Handle template selection and limit checks
   const handleTemplateClick = async (template) => {
@@ -746,6 +785,37 @@ export default function DashboardPage() {
       router.push("/pricing");
     } finally {
       setIsLoadingBilling(false);
+    }
+  };
+
+  // Update the handleDeleteTemplate function:
+  const handleDeleteTemplate = async (template) => {
+    // If no template provided, just close the dialog
+    if (!template) {
+      setTemplateToDelete(null);
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("templates")
+        .delete()
+        .eq("id", template.id)
+        .eq("user_id", (await supabase.auth.getUser()).data.user.id);
+
+      if (error) throw error;
+
+      setTemplates(templates.filter((t) => t.id !== template.id));
+      toast.success("Template deleted successfully");
+
+      posthog.capture("template_deleted", {
+        template_id: template.id,
+      });
+    } catch (error) {
+      console.error("Error deleting template:", error);
+      toast.error("Failed to delete template");
+    } finally {
+      setTemplateToDelete(null);
     }
   };
 
@@ -924,7 +994,33 @@ export default function DashboardPage() {
                 <DialogTitle className="text-xl mb-4">
                   Select A Template To Customize
                 </DialogTitle>
-                <div className="mb-4">
+                <div className="flex flex-col gap-4">
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={`${
+                        templateFilter === "all"
+                          ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                          : "hover:bg-muted"
+                      }`}
+                      onClick={() => setTemplateFilter("all")}
+                    >
+                      All Templates
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={`${
+                        templateFilter === "my"
+                          ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                          : "hover:bg-muted"
+                      }`}
+                      onClick={() => setTemplateFilter("my")}
+                    >
+                      My Templates
+                    </Button>
+                  </div>
                   <Input
                     type="text"
                     placeholder="Search templates..."
@@ -958,27 +1054,48 @@ export default function DashboardPage() {
                         {filteredTemplates.map((template) => (
                           <TableRow key={template.id}>
                             <TableCell className="font-medium">
-                              {template.template_name}
+                              <div className="flex items-center gap-2">
+                                {template.template_name}
+                                {!template.is_public && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-primary/10 text-primary whitespace-nowrap">
+                                    My Template
+                                  </span>
+                                )}
+                              </div>
                             </TableCell>
                             <TableCell>
-                              {JSON.parse(template.ideal_for).join(", ")}
+                              {formatIdealFor(template.ideal_for)}
                             </TableCell>
                             <TableCell className="max-w-[400px] truncate">
                               {template.description}
                             </TableCell>
                             <TableCell className="text-right">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleTemplateClick(template)}
-                                disabled={loadingTemplateId === template.id}
-                              >
-                                {loadingTemplateId === template.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  "Select"
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleTemplateClick(template)}
+                                  disabled={loadingTemplateId === template.id}
+                                >
+                                  {loadingTemplateId === template.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    "Select"
+                                  )}
+                                </Button>
+                                {!template.is_public && ( // Only show delete button for user's own templates
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    onClick={() =>
+                                      setTemplateToDelete(template)
+                                    }
+                                  >
+                                    Delete
+                                  </Button>
                                 )}
-                              </Button>
+                              </div>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -1174,6 +1291,32 @@ export default function DashboardPage() {
           cycleEnd={limitData?.cycleEnd}
           isLoading={!isInitialized}
         />
+
+        {/* AlertDialog component */}
+        <AlertDialog
+          open={templateToDelete !== null}
+          onOpenChange={(open) => !open && setTemplateToDelete(null)}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Template</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete "
+                {templateToDelete?.template_name}"? This action cannot be
+                undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-red-600 hover:bg-red-700 text-white"
+                onClick={() => handleDeleteTemplate(templateToDelete)}
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </>
   );

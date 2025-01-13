@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { posthog } from "@/lib/posthog";
+import { posthog } from "../lib/posthog";
 import { Suspense } from "react";
 
 // Component that uses search params

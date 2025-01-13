@@ -29,6 +29,7 @@ export async function POST(req) {
       complexity,
       length,
       businessContext,
+      saveAsTemplate,
     } = await req.json();
 
     // Check rate limits
@@ -238,6 +239,32 @@ Additional Requirements:
         { error: "Failed to save document", details: error.message },
         { status: 500 }
       );
+    }
+
+    // Create template if saveAsTemplate is true
+    if (saveAsTemplate) {
+      const { error: templateError } = await supabase.from("templates").insert([
+        {
+          user_id: userId,
+          template_name: documentDetails.title,
+          content: documentDetails.content,
+          description: documentDetails.description,
+          ideal_for: documentDetails.description,
+          is_ai_generated: true,
+          is_public: false,
+          is_active: true,
+          created_at: new Date().toISOString(),
+          placeholder_values: updatedPlaceholders,
+          jurisdiction: jurisdiction,
+          ai_gen_template: true,
+        },
+      ]);
+
+      if (templateError) {
+        console.error("Template creation error:", templateError);
+        // Don't fail the whole request if template creation fails
+        // Just log the error and continue
+      }
     }
 
     // Return response with correct structure
