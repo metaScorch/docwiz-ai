@@ -2,8 +2,8 @@ import localFont from "next/font/local";
 import "./globals.css";
 import { Toaster } from "sonner";
 import { Analytics } from "@vercel/analytics/react";
-import PostHogPageview from "@/components/PostHogPageview";
-import { PostHogProvider } from "@/components/providers/PostHogProvider";
+import PostHogPageview from "../components/PostHogPageview";
+import { PostHogProvider } from "../components/providers/PostHogProvider";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",

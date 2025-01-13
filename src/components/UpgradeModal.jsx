@@ -14,9 +14,9 @@ import { posthog } from '@/lib/posthog';
 export function UpgradeModal({ 
   open, 
   onOpenChange, 
-  limit,
   feature,
-  currentCount
+  currentCount,
+  limit 
 }) {
   const router = useRouter();
   const [isRedirecting, setIsRedirecting] = useState(false);
@@ -40,6 +40,9 @@ export function UpgradeModal({
     if (feature === 'autoformat') {
       return "Upgrade to Continue Using AutoFormat AI";
     }
+    if (feature === 'template_saving') {
+      return "Upgrade to Save Custom Templates";
+    }
     return "Upgrade to Continue";
   };
 
@@ -49,6 +52,9 @@ export function UpgradeModal({
     }
     if (feature === 'autoformat') {
       return `Only ${limit} AutoFormat AI uses per document are included with the free plan.`;
+    }
+    if (feature === 'template_saving') {
+      return "Save your frequently used agreements as templates for quick access. Available exclusively with our paid plans.";
     }
     return null;
   };
@@ -90,9 +96,6 @@ export function UpgradeModal({
           <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200 shadow-sm">
             <p className="text-yellow-800 text-sm">
               {getLimitMessage()}
-              <span className="block mt-1 text-xs text-yellow-700">
-                You've used {currentCount} out of {limit} available uses.
-              </span>
             </p>
           </div>
           <div className="bg-muted p-4 rounded-lg space-y-3">
@@ -102,7 +105,9 @@ export function UpgradeModal({
                 "Unlimited Documents",
                 "Unlimited AI Amendments and Clause Editor",
                 "Unlimited AutoFormat AI",
-                "Premium Templates"
+                "Save & Manage Custom Templates",
+                "Premium Templates Library Access",
+                "Priority Support"
               ].map((feature, index) => (
                 <li key={index} className="flex items-start">
                   <Check className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />

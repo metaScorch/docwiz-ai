@@ -580,12 +580,16 @@ export default function DashboardPage() {
   const fetchTemplates = async () => {
     setLoadingTemplates(true);
     try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      // Fetch both public templates and user's custom templates
       const { data, error } = await supabase
         .from("templates")
         .select("*, placeholder_values")
-        .eq("ai_gen_template", true)
+        .or(`is_public.eq.true,and(user_id.eq.${user.id},is_public.eq.false)`)
         .eq("is_active", true)
-        .eq("is_public", true)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -958,10 +962,23 @@ export default function DashboardPage() {
                         {filteredTemplates.map((template) => (
                           <TableRow key={template.id}>
                             <TableCell className="font-medium">
-                              {template.template_name}
+                              <div className="flex items-center gap-2">
+                                {template.template_name}
+                                {!template.is_public && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-primary/10 text-primary whitespace-nowrap">
+                                    My Template
+                                  </span>
+                                )}
+                                {template.ai_gen_template && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-purple-100 text-purple-800 border border-purple-200 whitespace-nowrap">
+                                    AI Generated
+                                  </span>
+                                )}
+                              </div>
                             </TableCell>
                             <TableCell>
-                              {JSON.parse(template.ideal_for).join(", ")}
+                              {template.ideal_for &&
+                                JSON.parse(template.ideal_for).join(", ")}
                             </TableCell>
                             <TableCell className="max-w-[400px] truncate">
                               {template.description}

@@ -49,6 +49,8 @@ export function NewAgreementForm() {
   const [businessContext, setBusinessContext] = useState(null);
   const [editableContext, setEditableContext] = useState(null);
   const [saveAsTemplate, setSaveAsTemplate] = useState(false);
+  const [showUpgradeForTemplate, setShowUpgradeForTemplate] = useState(false);
+  const [subscription, setSubscription] = useState(null);
 
   const generationSteps = [
     "Understanding the requirement",
@@ -95,6 +97,36 @@ export function NewAgreementForm() {
 
     initializeForm();
   }, []);
+
+  // Add this useEffect to fetch subscription status
+  useEffect(() => {
+    const fetchSubscription = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data: registration } = await supabase
+          .from('registrations')
+          .select('id')
+          .eq('user_id', user.id)
+          .single();
+
+        if (registration) {
+          const { data: subscriptionData } = await supabase
+            .from('subscriptions')
+            .select('*')
+            .eq('registration_id', registration.id)
+            .single();
+
+          setSubscription(subscriptionData);
+        }
+      } catch (error) {
+        console.error('Error fetching subscription:', error);
+      }
+    };
+
+    fetchSubscription();
+  }, [supabase]);
 
   // Separate functions for cleaner code
   const fetchUserRegistration = async () => {
@@ -373,6 +405,14 @@ export function NewAgreementForm() {
     }));
   };
 
+  const handleTemplateCheckboxChange = (checked) => {
+    if (!subscription?.status || subscription?.status !== 'active') {
+      setShowUpgradeForTemplate(true);
+      return;
+    }
+    setSaveAsTemplate(checked);
+  };
+
   return (
     <>
       <Toaster />
@@ -596,13 +636,16 @@ Example: I need a non-disclosure agreement for a freelance developer who will be
           <Checkbox
             id="saveTemplate"
             checked={saveAsTemplate}
-            onCheckedChange={setSaveAsTemplate}
+            onCheckedChange={handleTemplateCheckboxChange}
           />
           <label
             htmlFor="saveTemplate"
-            className="text-sm text-muted-foreground cursor-pointer"
+            className="text-sm text-muted-foreground cursor-pointer flex items-center gap-2"
           >
             Save as template for future use
+            <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded-sm">
+              Pro Feature ✨
+            </span>
           </label>
           <TooltipProvider>
             <Tooltip>
@@ -610,7 +653,13 @@ Example: I need a non-disclosure agreement for a freelance developer who will be
                 <Info className="h-4 w-4 text-muted-foreground cursor-pointer hover:text-primary" />
               </TooltipTrigger>
               <TooltipContent>
-                <p>This will save the generated agreement as a private template for your future use</p>
+                <p>
+                  Save this agreement as a private template for your future use{' '}
+                  {subscription?.status === 'active' ? 
+                    '(Included in your pro plan)' : 
+                    '(Pro feature)'
+                  }
+                </p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -634,6 +683,14 @@ Example: I need a non-disclosure agreement for a freelance developer who will be
         limit={limitData?.limit || 3}
         cycleEnd={limitData?.cycleEnd}
         isLoading={false}
+      />
+
+      <UpgradeModal
+        open={showUpgradeForTemplate}
+        onOpenChange={setShowUpgradeForTemplate}
+        feature="template_saving"
+        limit={0}
+        currentCount={0}
       />
     </>
   );
