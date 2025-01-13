@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { CardTitle, CardDescription } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export default function SignupStep({ onNext }) {
   const supabase = createClientComponentClient();
@@ -24,8 +25,15 @@ export default function SignupStep({ onNext }) {
     fullName: "",
   });
   const router = useRouter();
+  const [acceptedTerms, setAcceptedTerms] = useState(true);
 
   const handleGoogleSignUp = async () => {
+    if (!acceptedTerms) {
+      toast.error(
+        "Please accept the Terms of Service and Privacy Policy to continue"
+      );
+      return;
+    }
     try {
       setIsGoogleLoading(true);
       const { error } = await supabase.auth.signInWithOAuth({
@@ -45,6 +53,12 @@ export default function SignupStep({ onNext }) {
 
   const handleEmailSignUp = async (e) => {
     e.preventDefault();
+    if (!acceptedTerms) {
+      toast.error(
+        "Please accept the Terms of Service and Privacy Policy to continue"
+      );
+      return;
+    }
     setIsEmailLoading(true);
     setEmailError("");
 
@@ -227,10 +241,50 @@ export default function SignupStep({ onNext }) {
           </AlertDescription>
         </Alert>
 
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="terms"
+            checked={acceptedTerms}
+            onCheckedChange={setAcceptedTerms}
+          />
+          <Label htmlFor="terms" className="text-sm">
+            I agree to the{" "}
+            <a
+              href="#"
+              className="text-primary hover:underline"
+              onClick={(e) => {
+                e.preventDefault();
+                window.open(
+                  "https://mydocwiz.com/tos",
+                  "_blank",
+                  "width=800,height=600"
+                );
+              }}
+            >
+              Terms of Service
+            </a>{" "}
+            and{" "}
+            <a
+              href="#"
+              className="text-primary hover:underline"
+              onClick={(e) => {
+                e.preventDefault();
+                window.open(
+                  "https://mydocwiz.com/privacy",
+                  "_blank",
+                  "width=800,height=600"
+                );
+              }}
+            >
+              Privacy Policy
+            </a>
+          </Label>
+        </div>
+
         <Button
           type="submit"
           className="w-full"
-          disabled={isGoogleLoading || isEmailLoading}
+          disabled={isGoogleLoading || isEmailLoading || !acceptedTerms}
         >
           {isEmailLoading ? (
             <>

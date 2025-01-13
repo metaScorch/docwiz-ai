@@ -283,7 +283,7 @@ export default function SignInPage() {
             </Button>
           </div>
         </CardContent>
-        <CardFooter>
+        <CardFooter className="flex flex-col space-y-4">
           <p className="text-center text-sm text-muted-foreground w-full">
             Don&apos;t have an account?{" "}
             <Link
@@ -292,6 +292,38 @@ export default function SignInPage() {
             >
               Sign up
             </Link>
+          </p>
+          <p className="text-center text-xs text-muted-foreground">
+            By proceeding, you agree to our{" "}
+            <a
+              href="#"
+              className="text-primary hover:underline"
+              onClick={(e) => {
+                e.preventDefault();
+                window.open(
+                  "https://mydocwiz.com/tos",
+                  "_blank",
+                  "width=800,height=600"
+                );
+              }}
+            >
+              Terms of Service
+            </a>{" "}
+            and{" "}
+            <a
+              href="#"
+              className="text-primary hover:underline"
+              onClick={(e) => {
+                e.preventDefault();
+                window.open(
+                  "https://mydocwiz.com/privacy",
+                  "_blank",
+                  "width=800,height=600"
+                );
+              }}
+            >
+              Privacy Policy
+            </a>
           </p>
         </CardFooter>
       </Card>
