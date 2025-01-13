@@ -48,6 +48,7 @@ export function NewAgreementForm() {
   const [useBusinessContext, setUseBusinessContext] = useState(false);
   const [businessContext, setBusinessContext] = useState(null);
   const [editableContext, setEditableContext] = useState(null);
+  const [saveAsTemplate, setSaveAsTemplate] = useState(false);
 
   const generationSteps = [
     "Understanding the requirement",
@@ -222,7 +223,8 @@ export function NewAgreementForm() {
           jurisdiction,
           complexity,
           length,
-          businessContext: useBusinessContext ? (editableContext || businessContext) : null
+          businessContext: useBusinessContext ? (editableContext || businessContext) : null,
+          saveAsTemplate
         }),
       });
 
@@ -588,6 +590,30 @@ Example: I need a non-disclosure agreement for a freelance developer who will be
             />
             <p className="text-sm text-muted-foreground">{getLengthLabel(length)}</p>
           </div>
+        </div>
+
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="saveTemplate"
+            checked={saveAsTemplate}
+            onCheckedChange={setSaveAsTemplate}
+          />
+          <label
+            htmlFor="saveTemplate"
+            className="text-sm text-muted-foreground cursor-pointer"
+          >
+            Save as template for future use
+          </label>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Info className="h-4 w-4 text-muted-foreground cursor-pointer hover:text-primary" />
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>This will save the generated agreement as a private template for your future use</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
 
         <Button 
