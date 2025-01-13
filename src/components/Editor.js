@@ -137,6 +137,14 @@ export default function Editor({
   const handleHeaderChange = (newHeaderContent) => {
     console.log("New raw header content:", newHeaderContent);
 
+    // Get the current content before making any changes
+    const currentContent = editor.storage.markdown.getMarkdown();
+
+    // Split the content to separate header and body
+    const contentParts = currentContent.split("\n---\n");
+    const mainContent =
+      contentParts.length > 1 ? contentParts[1] : currentContent;
+
     // Ensure proper line breaks and Markdown formatting
     const formattedHeader = newHeaderContent
       .replace(/!\[(.*?)\]\((.*?)\)/, (match) => `\n\n${match}\n\n`) // Add breaks around images
@@ -145,6 +153,12 @@ export default function Editor({
       .trim();
 
     console.log("Formatted header content:", formattedHeader);
+    console.log("Preserving main content:", mainContent);
+
+    // Update the editor with both header and main content
+    if (displayHeader) {
+      editor.commands.setContent(`${formattedHeader}\n---\n${mainContent}`);
+    }
 
     if (onHeaderChange) {
       onHeaderChange(formattedHeader);
@@ -166,26 +180,23 @@ export default function Editor({
       letterhead += `<div style="text-align: left">![${registration.entity_name || "Company Logo"}](${registration.logo_url})</div>\n\n`;
     }
 
-    // Company name
+    // Company name as heading
     letterhead += `## ${registration.entity_name || ""}\n\n`;
 
-    // Address
+    // Address (no heading formatting)
     if (registration.address_line1) {
       letterhead += `${registration.address_line1} ${registration.city_name || ""}, ${registration.state_name || ""} ${registration.postal_code || ""}\n\n`;
     }
 
-    // Contact info
+    // Contact info (no heading formatting)
     const contactInfo = [];
     if (registration.phone_number)
-      contactInfo.push(`+${registration.phone_number.replace(/\D/g, "")}`);
+      contactInfo.push(`${registration.phone_number}`);
     if (registration.email) contactInfo.push(registration.email);
 
     if (contactInfo.length > 0) {
       letterhead += `${contactInfo.join(" | ")}\n\n`;
     }
-
-    // // Single separator line with no extra newlines
-    // letterhead += "---";
 
     console.log("Generated letterhead content:", letterhead);
     return letterhead;
