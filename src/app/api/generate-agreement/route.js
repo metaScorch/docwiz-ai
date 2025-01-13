@@ -248,7 +248,7 @@ Additional Requirements:
           user_id: userId,
           template_name: documentDetails.title,
           content: documentDetails.content,
-          description: prompt,
+          description: documentDetails.description,
           ideal_for: documentDetails.description,
           is_ai_generated: true,
           is_public: false,
