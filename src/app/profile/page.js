@@ -52,23 +52,25 @@ import {
 } from "@/components/ui/dialog";
 
 function getCroppedImg(image, crop) {
+  // First canvas for cropping
   const cropCanvas = document.createElement("canvas");
   const scaleX = image.naturalWidth / image.width;
   const scaleY = image.naturalHeight / image.height;
+
   cropCanvas.width = crop.width;
-  cropCanvas.height = crop.width / 4;
+  cropCanvas.height = crop.height;
   const ctx = cropCanvas.getContext("2d");
 
   const pixelRatio = window.devicePixelRatio;
   cropCanvas.width = crop.width * pixelRatio;
-  cropCanvas.height = (crop.width / 4) * pixelRatio;
+  cropCanvas.height = crop.height * pixelRatio;
   ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
   ctx.imageSmoothingQuality = "high";
 
   const sourceX = crop.x * scaleX;
   const sourceY = crop.y * scaleY;
   const sourceWidth = crop.width * scaleX;
-  const sourceHeight = (crop.width / 4) * scaleY;
+  const sourceHeight = crop.height * scaleY;
 
   ctx.drawImage(
     image,
@@ -79,30 +81,33 @@ function getCroppedImg(image, crop) {
     0,
     0,
     crop.width,
-    crop.width / 4
+    crop.height
   );
 
-  const resizeCanvas = document.createElement("canvas");
-  resizeCanvas.width = 120;
-  resizeCanvas.height = 30;
-  const resizeCtx = resizeCanvas.getContext("2d");
-  resizeCtx.imageSmoothingEnabled = true;
-  resizeCtx.imageSmoothingQuality = "high";
+  // Second canvas for resizing to final dimensions
+  const finalCanvas = document.createElement("canvas");
+  finalCanvas.width = 140;
+  finalCanvas.height = 35;
+  const finalCtx = finalCanvas.getContext("2d");
+  finalCtx.imageSmoothingQuality = "high";
+  finalCtx.fillStyle = "white"; // Optional: fill background with white
+  finalCtx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
 
-  resizeCtx.drawImage(
-    cropCanvas,
-    0,
-    0,
-    cropCanvas.width,
-    cropCanvas.height,
-    0,
-    0,
-    140,
-    35
-  );
+  // Calculate scaling to maintain aspect ratio
+  const scale = Math.min(140 / cropCanvas.width, 35 / cropCanvas.height);
+
+  // Calculate dimensions after scaling
+  const scaledWidth = cropCanvas.width * scale;
+  const scaledHeight = cropCanvas.height * scale;
+
+  // Calculate position to center the image
+  const x = (140 - scaledWidth) / 2;
+  const y = (35 - scaledHeight) / 2;
+
+  finalCtx.drawImage(cropCanvas, x, y, scaledWidth, scaledHeight);
 
   return new Promise((resolve) => {
-    resizeCanvas.toBlob(
+    finalCanvas.toBlob(
       (blob) => {
         resolve(blob);
       },
@@ -511,7 +516,7 @@ export default function ProfilePage() {
                           alt="Company Logo"
                           width={100}
                           height={33}
-                          className="rounded-lg"
+                          className=""
                           priority={true}
                           unoptimized={false}
                         />
