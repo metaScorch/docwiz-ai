@@ -51,6 +51,7 @@ export function NewAgreementForm() {
   const [saveAsTemplate, setSaveAsTemplate] = useState(false);
   const [showUpgradeForTemplate, setShowUpgradeForTemplate] = useState(false);
   const [subscription, setSubscription] = useState(null);
+  const [promptError, setPromptError] = useState(null);
 
   const generationSteps = [
     "Understanding the requirement",
@@ -161,11 +162,42 @@ export function NewAgreementForm() {
     }
   };
 
+  const validatePrompt = (text) => {
+    // Reset error
+    setPromptError(null);
+
+    // Check minimum length
+    if (text.length < 10) {
+      setPromptError("Please provide more details (minimum 10 characters)");
+      return false;
+    }
+
+    // Check for gibberish using a simple heuristic
+    // This checks for repeated characters or lack of spaces
+    const repeatedChars = /(.)\1{4,}/;  // 5 or more repeated characters
+    const hasSpaces = /\s/.test(text);
+    const hasGibberish = repeatedChars.test(text) || !hasSpaces;
+
+    if (hasGibberish) {
+      setPromptError("Please provide a valid description of your agreement needs");
+      return false;
+    }
+
+    return true;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    const startTime = Date.now();
-    
+    // Validate prompt first
+    if (!validatePrompt(prompt)) {
+      // Track validation error
+      posthog.capture('agreement_generation_validation_error', {
+        error_type: 'invalid_prompt'
+      });
+      return;
+    }
+
     if (!jurisdiction) {
       setJurisdictionError(true);
       // Track validation error
@@ -175,6 +207,8 @@ export function NewAgreementForm() {
       return;
     }
 
+    const startTime = Date.now();
+    
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
@@ -448,9 +482,17 @@ export function NewAgreementForm() {
             placeholder="Explain what agreement you need and for what purpose...
 Example: I need a non-disclosure agreement for a freelance developer who will be working on my startup"
             value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            className="min-h-[120px]"
+            onChange={(e) => {
+              setPrompt(e.target.value);
+              setPromptError(null); // Clear error when user types
+            }}
+            className={`min-h-[120px] ${promptError ? 'border-red-500' : ''}`}
           />
+          {promptError && (
+            <p className="text-sm text-red-500">
+              {promptError}
+            </p>
+          )}
           <p className="text-sm text-muted-foreground">
             Tip: Check our templates first to save time - we have many common agreements ready to use.
           </p>
