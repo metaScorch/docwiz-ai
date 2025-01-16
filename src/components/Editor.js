@@ -131,7 +131,22 @@ export default function Editor({
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        heading: { levels: [1, 2, 3, 4, 5, 6] },
+        heading: {
+          levels: [1, 2, 3],
+          HTMLAttributes: {
+            class: "editor-heading",
+          },
+        },
+        bulletList: {
+          HTMLAttributes: {
+            class: "editor-bullet-list",
+          },
+        },
+        orderedList: {
+          HTMLAttributes: {
+            class: "editor-ordered-list",
+          },
+        },
         codeBlock: false,
       }),
       Placeholder.configure({
