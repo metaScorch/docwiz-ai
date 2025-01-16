@@ -12,14 +12,8 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
-import { Switch } from "@/components/ui/switch";
 
-export default function Sidebar({
-  documentValues,
-  onValueChange,
-  displayHeader,
-  onDisplayHeaderChange,
-}) {
+export default function Sidebar({ documentValues, onValueChange }) {
   const [openCalendars, setOpenCalendars] = useState({});
 
   const totalFields = documentValues ? Object.keys(documentValues).length : 0;
@@ -146,31 +140,16 @@ export default function Sidebar({
   return (
     <div className="w-80 border-l bg-muted/10">
       <div className="p-4 border-b">
-        <h2 className="font-semibold">Document Settings</h2>
-
-        <div className="flex items-center justify-between py-4">
-          <div className="space-y-0.5">
-            <Label htmlFor="letterhead">Letterhead</Label>
-            <p className="text-xs text-muted-foreground">
-              Display your business information at the top
-            </p>
-          </div>
-          <Switch
-            id="letterhead"
-            checked={displayHeader}
-            onCheckedChange={onDisplayHeaderChange}
-          />
-        </div>
-
-        <div className="border-t pt-4">
-          <h2 className="font-semibold">Document Fields</h2>
-          <div className="mt-2 text-sm">
-            <span
-              className={`font-medium ${filledFields === totalFields ? "text-green-500" : "text-amber-500"}`}
-            >
-              {filledFields}/{totalFields} fields completed
-            </span>
-          </div>
+        <h2 className="font-semibold">Document Fields</h2>
+        <p className="text-sm text-muted-foreground">
+          Fill in the values for the placeholders in your document
+        </p>
+        <div className="mt-2 text-sm">
+          <span
+            className={`font-medium ${filledFields === totalFields ? "text-green-500" : "text-amber-500"}`}
+          >
+            {filledFields}/{totalFields} fields completed
+          </span>
         </div>
       </div>
 

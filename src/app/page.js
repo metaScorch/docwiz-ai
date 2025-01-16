@@ -1,7 +1,7 @@
 // src/app/page.js
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 
@@ -10,8 +10,11 @@ function SearchParamsHandler() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  // Handle any search params logic here
-  router.push("/dashboard");
+  useEffect(() => {
+    // Handle any search params logic here
+    router.push("/dashboard");
+  }, [router]);
+
   return null;
 }
 
