@@ -94,7 +94,7 @@ Please tailor the agreement specifically for this business context, incorporatin
 1. **Document Details**:
    - "title" (string): A concise name for the document.
    - "description" (string): A brief explanation of the document's purpose.
-   - "content" (string): The main body of the document written in Markdown format. ALWAYS use generic placeholders in the format "{{PLACEHOLDER_NAME}}" for any variable information, even when specific values are provided in the prompt. Never embed actual values directly in the content. DO NOT include any signature blocks, signature sections, or disclaimers at the end of the document as these will be handled separately.
+   - "content" (string): The main body of the document written in Markdown format. ALWAYS use generic placeholders in the format "{{PLACEHOLDER_NAME}}" for any variable information. Never embed actual values directly in the content. DO NOT include any signature blocks, signature sections, or disclaimers at the end of the document as these will be handled separately.
    - "isLegal" (boolean): Indicate whether the requested agreement is legal in the specified jurisdiction.
    - "legalityNotes" (string): Optional explanation if the agreement is not legal.
 
@@ -102,58 +102,16 @@ Please tailor the agreement specifically for this business context, incorporatin
    - A list of all placeholders used in the "content" field. Each placeholder must be represented as an object with:
       - "name" (string): The exact name of the placeholder (e.g., "PLACEHOLDER_NAME").
       - "description" (string): A brief description of the purpose or meaning of the placeholder.
-      - "value" (string): IMPORTANT: You MUST extract and populate this field with any relevant values provided in the prompt or business context. For example:
-         - If the prompt mentions salary, populate BASE_SALARY's value
-         - If business context includes company name, populate COMPANY_NAME's value
-         - If business context includes address details, populate ADDRESS related values
-         Only leave this empty if no relevant information is provided in the prompt or context.
       - "format" (object): Specifies the input format with properties:
          - "type": One of "text", "date", "currency", "number", "email", "phone".
          - "currency": Required if type is "currency", specify "USD" or "INR" based on jurisdiction.
          - "pattern": Optional regex pattern for validation.
-      - "signer" (boolean): Required field indicating whether this placeholder represents a signing party's name. Must be true for any signing party placeholders and false for all other placeholders.
-
-EXAMPLE:
-If a prompt contains "paid 180k USD per year and 20% bonus, 0.5% stock over 4 years with 6 months cliff", you should populate:
-- BASE_SALARY: "180000"
-- PERFORMANCE_BONUS_PERCENTAGE: "20"
-- EQUITY_PERCENTAGE: "0.5"
-- VESTING_PERIOD: "4 years"
-- CLIFF_PERIOD: "6 months"
-
-If business context contains:
-{
-  "entity_name": "RentEz, Inc",
-  "organization_type": "Startup",
-  "city_name": "Menlo Park",
-  "state_name": "CA"
-}
-You should populate:
-- COMPANY_TYPE: "Startup"
-- COMPANY_ADDRESS: "Menlo Park, CA, USA"
+      - "signer" (boolean): Required field indicating whether this placeholder represents a signing party's name.
 
 Important Guidelines:
-1. Always use placeholders in the document content, even when specific values are provided in the prompt.
-2. You MUST extract and populate placeholder values when the information is available in either:
-   - The user's prompt (e.g., salary, role, stock details)
-   - The business context (e.g., company name, address, industry)
-3. The document content should remain generic and reusable.
-4. Common values to extract from prompt (when available):
-   - Salary figures
-   - Bonus percentages
-   - Stock/equity details
-   - Role/position titles
-   - Vesting schedules
-5. Common values to extract from business context:
-   - Company name
-   - Address components
-   - Industry
-   - Organization type
-   - Jurisdiction
-
-Important: Do not include any disclaimers, legal notices, or statements about consulting attorneys. The document should be complete and legally valid without such disclaimers. Do not include any signature blocks, signature lines, or signature sections in the document content. These will be handled separately by the system.
-
-The output must be valid JSON and strictly adhere to the described format.
+1. Always use placeholders in the document content.
+2. The document content should remain generic and reusable.
+3. Do not include any disclaimers, legal notices, or signature blocks.
 
 Additional Requirements:
 - The document should be between ${wordCountRanges[length].min} and ${wordCountRanges[length].max} words.
@@ -187,14 +145,27 @@ Additional Requirements:
       .trim()
       .replace(/[\n\r]/g, " ")
       .replace(/^```json\s*|\s*```$/g, "");
-    const parsedResponse = JSON.parse(cleanedResponse);
+
+    let parsedResponse;
+    try {
+      parsedResponse = JSON.parse(cleanedResponse);
+    } catch (error) {
+      console.error("JSON parsing error:", error);
+      console.error("Raw response:", response);
+      throw new Error("Invalid JSON response from OpenAI");
+    }
 
     // Get the document details and placeholders with proper structure
-    const documentDetails = parsedResponse.DocumentDetails;
-    const placeholders = parsedResponse.Placeholders;
+    const documentDetails =
+      parsedResponse.DocumentDetails || parsedResponse.documentDetails;
+    const placeholders =
+      parsedResponse.Placeholders || parsedResponse.placeholders;
 
     if (!documentDetails || !placeholders) {
-      throw new Error("Missing DocumentDetails or Placeholders");
+      console.error("Invalid response structure:", parsedResponse);
+      throw new Error(
+        "Invalid response structure from OpenAI - missing required fields"
+      );
     }
 
     // Call the extract-values endpoint
