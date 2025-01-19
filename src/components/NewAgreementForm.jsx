@@ -52,6 +52,7 @@ export function NewAgreementForm() {
   const [showUpgradeForTemplate, setShowUpgradeForTemplate] = useState(false);
   const [subscription, setSubscription] = useState(null);
   const [promptError, setPromptError] = useState(null);
+  const [upgradeFeature, setUpgradeFeature] = useState(null);
 
   const generationSteps = [
     "Understanding the requirement",
@@ -252,6 +253,7 @@ export function NewAgreementForm() {
         if (!limitInfo.allowed) {
           setLoading(false);
           setShowUpgrade(true);
+          setUpgradeFeature('documents');
           // Track limit reached
           posthog.capture('agreement_generation_limit_reached', {
             current_count: limitInfo.currentCount,
@@ -409,6 +411,11 @@ export function NewAgreementForm() {
 
   // Track form field changes
   const handleComplexityChange = (value) => {
+    if (!subscription?.status || subscription?.status !== 'active') {
+      setShowUpgrade(true);
+      setUpgradeFeature('complexity');
+      return;
+    }
     setComplexity(value);
     posthog.capture('agreement_complexity_changed', {
       complexity: value,
@@ -417,6 +424,11 @@ export function NewAgreementForm() {
   };
 
   const handleLengthChange = (value) => {
+    if (!subscription?.status || subscription?.status !== 'active') {
+      setShowUpgrade(true);
+      setUpgradeFeature('length');
+      return;
+    }
     setLength(value);
     posthog.capture('agreement_length_changed', {
       length: value,
@@ -642,14 +654,29 @@ Example: I need a non-disclosure agreement for a freelance developer who will be
         </div>
         <div className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm text-muted-foreground">Wording Complexity</label>
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-muted-foreground">Wording Complexity</label>
+              <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded-sm">
+                Pro Feature ✨
+              </span>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-4 w-4 text-muted-foreground cursor-pointer hover:text-primary" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Customize the complexity of legal language used in your agreement (Pro feature)</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
             <Slider
               min={1}
               max={5}
               step={1}
               value={[complexity]}
               onValueChange={([value]) => handleComplexityChange(value)}
-              className="w-full"
+              className={`w-full ${!subscription?.status || subscription?.status !== 'active' ? 'opacity-50' : ''}`}
               style={{
                 "--slider-color": "#0700c7"
               }}
@@ -658,14 +685,29 @@ Example: I need a non-disclosure agreement for a freelance developer who will be
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm text-muted-foreground">Agreement Length</label>
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-muted-foreground">Agreement Length</label>
+              <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded-sm">
+                Pro Feature ✨
+              </span>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-4 w-4 text-muted-foreground cursor-pointer hover:text-primary" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Customize the length and detail level of your agreement (Pro feature)</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
             <Slider
               min={1}
               max={5}
               step={1}
               value={[length]}
               onValueChange={([value]) => handleLengthChange(value)}
-              className="w-full"
+              className={`w-full ${!subscription?.status || subscription?.status !== 'active' ? 'opacity-50' : ''}`}
               style={{
                 "--slider-color": "#0700c7"
               }}
@@ -721,6 +763,7 @@ Example: I need a non-disclosure agreement for a freelance developer who will be
       <UpgradeModal
         open={showUpgrade}
         onOpenChange={setShowUpgrade}
+        feature={upgradeFeature}
         currentCount={limitData?.currentCount || 0}
         limit={limitData?.limit || 3}
         cycleEnd={limitData?.cycleEnd}

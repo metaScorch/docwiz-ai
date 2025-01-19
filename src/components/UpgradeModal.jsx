@@ -34,6 +34,9 @@ export function UpgradeModal({
   }, [open, feature, currentCount, limit]);
 
   const getTitle = () => {
+    if (feature === 'documents') {
+      return "Upgrade to Create More Documents";
+    }
     if (feature === 'amendments') {
       return "Upgrade to Continue Using AI Amendments";
     }
@@ -43,20 +46,41 @@ export function UpgradeModal({
     if (feature === 'template_saving') {
       return "Upgrade to Save Custom Templates";
     }
+    if (feature === 'complexity') {
+      return "Upgrade to Customize Agreement Complexity";
+    }
+    if (feature === 'length') {
+      return "Upgrade to Customize Agreement Length";
+    }
     return "Upgrade to Continue";
   };
 
   const getLimitMessage = () => {
-    if (feature === 'amendments') {
-      return `Only ${limit} AI Amendments per document are included with the free plan.`;
+    // Add console.log to debug the feature value
+    console.log('Current feature:', feature);
+    console.log('Current limit:', limit);
+    console.log('Current count:', currentCount);
+
+    if (!feature) {
+      return "Upgrade to unlock premium features and continue using this functionality.";
     }
-    if (feature === 'autoformat') {
-      return `Only ${limit} AutoFormat AI uses per document are included with the free plan.`;
+
+    switch (feature.toLowerCase()) {
+      case 'documents':
+        return `You've reached the limit of ${limit} documents on the free plan. Upgrade now for unlimited documents.`;
+      case 'amendments':
+        return `Only ${limit} AI Amendments per document are included with the free plan.`;
+      case 'autoformat':
+        return `Only ${limit} AutoFormat AI uses per document are included with the free plan.`;
+      case 'template_saving':
+        return "Save your frequently used agreements as templates for quick access. Available exclusively with our paid plans.";
+      case 'complexity':
+        return "Control the complexity of legal language in your agreements with our pro plan. Upgrade now to customize between simple and technical language.";
+      case 'length':
+        return "Choose between brief or comprehensive agreements with our pro plan. Upgrade now to control the length and detail of your documents.";
+      default:
+        return "Upgrade to unlock premium features and continue using this functionality.";
     }
-    if (feature === 'template_saving') {
-      return "Save your frequently used agreements as templates for quick access. Available exclusively with our paid plans.";
-    }
-    return null;
   };
 
   const handleUpgradeClick = () => {

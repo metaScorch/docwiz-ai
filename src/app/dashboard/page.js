@@ -676,11 +676,18 @@ export default function DashboardPage() {
 
       // If no subscription, run usage limit check
       if (!hasActiveSubscription) {
-        const limitData = await checkDocumentLimit(user.id);
-        setLimitData(limitData);
-        if (!limitData.allowed) {
+        const limitInfo = await checkDocumentLimit(user.id);
+        setLimitData(limitInfo);
+
+        if (!limitInfo.allowed) {
           setShowTemplateDialog(false);
           setShowUpgrade(true);
+          // Track limit reached
+          posthog.capture("template_generation_limit_reached", {
+            current_count: limitInfo.currentCount,
+            limit: limitInfo.limit,
+            cycle_end: limitInfo.cycleEnd,
+          });
           return;
         }
       }
@@ -1286,6 +1293,7 @@ export default function DashboardPage() {
         <UpgradeModal
           open={showUpgrade}
           onOpenChange={setShowUpgrade}
+          feature="documents"
           currentCount={limitData?.currentCount || 0}
           limit={limitData?.limit || 3}
           cycleEnd={limitData?.cycleEnd}
