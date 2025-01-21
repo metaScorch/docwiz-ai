@@ -57,6 +57,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { PaymentStatusModal } from "@/components/PaymentStatusModal";
 
 // Status filter definitions
 const STATUS_FILTERS = [
@@ -370,6 +371,7 @@ const formatIdealFor = (idealFor) => {
 export default function DashboardPage() {
   const router = useRouter();
   const supabase = createClientComponentClient();
+  const searchParams = useSearchParams();
 
   // Basic stats
   const [stats, setStats] = useState({
@@ -403,6 +405,7 @@ export default function DashboardPage() {
 
   // Inside DashboardPage component, add this state:
   const [templateToDelete, setTemplateToDelete] = useState(null);
+  const [paymentStatus, setPaymentStatus] = useState(null);
 
   // On mount, fetch user session, registration, subscription, documents
   useEffect(() => {
@@ -824,6 +827,27 @@ export default function DashboardPage() {
     } finally {
       setTemplateToDelete(null);
     }
+  };
+
+  // Add this useEffect to handle payment status from URL
+  useEffect(() => {
+    const payment = searchParams.get("payment");
+    if (payment === "success" || payment === "failed") {
+      setPaymentStatus(payment);
+
+      // Track payment status in PostHog
+      posthog.capture("payment_status", {
+        status: payment,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }, [searchParams]);
+
+  // Add this function to handle modal close
+  const handlePaymentModalClose = () => {
+    setPaymentStatus(null);
+    // Clean up the URL without refreshing the page
+    window.history.replaceState({}, "", "/dashboard");
   };
 
   if (!isInitialized) {
@@ -1325,6 +1349,11 @@ export default function DashboardPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        <PaymentStatusModal
+          status={paymentStatus}
+          onClose={handlePaymentModalClose}
+        />
       </div>
     </>
   );

@@ -117,7 +117,7 @@ export default function PricingPage() {
   };
 
   const handleSubscription = async (plan) => {
-    // If user clicked the Enterprise plan “Contact Sales”
+    // If user clicked the Enterprise plan "Contact Sales"
     if (plan.name === "ENTERPRISE") {
       posthog.capture("enterprise_contact_clicked");
       window.open("https://tally.so/r/wgYL9K", "_blank");
@@ -146,7 +146,7 @@ export default function PricingPage() {
         return;
       }
 
-      // Fetch user’s registration
+      // Fetch user's registration
       const { data: registration, error: registrationError } = await supabase
         .from("registrations")
         .select("stripe_customer_id")
@@ -198,6 +198,8 @@ export default function PricingPage() {
         body: JSON.stringify({
           priceId: isMonthly ? plan.priceId.monthly : plan.priceId.yearly,
           customerId: stripeCustomerId,
+          successUrl: `${window.location.origin}/dashboard?payment=success`,
+          cancelUrl: `${window.location.origin}/dashboard?payment=failed`,
         }),
       });
 
