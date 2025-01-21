@@ -10,9 +10,9 @@ const APP_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
 export async function POST(req) {
   try {
-    const { priceId, customerId } = await req.json();
+    const { priceId, customerId, successUrl, cancelUrl } = await req.json();
 
-    if (!priceId || !customerId) {
+    if (!priceId || !customerId || !successUrl || !cancelUrl) {
       return NextResponse.json(
         { error: "Missing required parameters" },
         { status: 400 }
@@ -22,23 +22,26 @@ export async function POST(req) {
     console.log("Creating checkout session with:", {
       priceId,
       customerId,
+      successUrl,
+      cancelUrl,
     });
 
-    const checkoutSession = await stripe.checkout.sessions.create({
-      mode: "subscription",
-      payment_method_types: ["card"],
+    const session = await stripe.checkout.sessions.create({
       customer: customerId,
+      payment_method_types: ["card"],
       line_items: [
         {
           price: priceId,
           quantity: 1,
         },
       ],
-      success_url: `${APP_URL}/dashboard?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${APP_URL}/pricing`,
+      mode: "subscription",
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      allow_promotion_codes: true,
     });
 
-    return NextResponse.json({ sessionId: checkoutSession.id });
+    return NextResponse.json({ sessionId: session.id });
   } catch (error) {
     console.error("Error creating checkout session:", error);
     return NextResponse.json(
