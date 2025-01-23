@@ -1,11 +1,10 @@
-export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method Not Allowed" });
-  }
+import { NextResponse } from "next/server";
 
+export async function POST(req) {
   try {
     // Parse the incoming request from Supabase
-    const { eventType, table, new: newData, old: oldData } = req.body;
+    const body = await req.json();
+    const { eventType, table, new: newData, old: oldData } = body;
 
     // Customize message for user signups
     let messageContent = `**New Event Triggered:** ${eventType} in table \`${table}\``;
@@ -42,7 +41,7 @@ export default async function handler(req, res) {
 
     // Send the payload to Discord
     const response = await fetch(
-      "https://discord.com/api/webhooks/1327533270681784362/zG--lqojygCw41Cwa7Jtuc9l6d8SqL89hTxpxYFDXIf0z1lh4hn_x57lbv4pEimqu9Wf",
+      "https://discord.com/api/webhooks/1326505079452336208/rn4jEaQdb2amYDoPLCQ1croPO3-iIciwICI9JJQPkABnR3JuBFNW_yf7zUsuVzOjpzQE",
       {
         method: "POST",
         headers: {
@@ -56,17 +55,22 @@ export default async function handler(req, res) {
     if (!response.ok) {
       const errorMessage = await response.text();
       console.error("Discord webhook error:", errorMessage);
-      return res
-        .status(500)
-        .json({ error: "Failed to send webhook to Discord" });
+      return NextResponse.json(
+        { error: "Failed to send webhook to Discord" },
+        { status: 500 }
+      );
     }
 
     // Respond to Supabase
-    res
-      .status(200)
-      .json({ message: "Webhook successfully forwarded to Discord" });
+    return NextResponse.json(
+      { message: "Webhook successfully forwarded to Discord" },
+      { status: 200 }
+    );
   } catch (error) {
     console.error("Error handling webhook:", error);
-    res.status(500).json({ error: "Internal Server Error" });
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
   }
 }
