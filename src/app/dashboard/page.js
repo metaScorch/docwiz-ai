@@ -406,6 +406,7 @@ export default function DashboardPage() {
   // Inside DashboardPage component, add this state:
   const [templateToDelete, setTemplateToDelete] = useState(null);
   const [paymentStatus, setPaymentStatus] = useState(null);
+  const [userLogo, setUserLogo] = useState(null);
 
   // On mount, fetch user session, registration, subscription, documents
   useEffect(() => {
@@ -419,7 +420,7 @@ export default function DashboardPage() {
         // Check user registrations
         const { data: registrations, error: regError } = await supabase
           .from("registrations")
-          .select("id, status, created_at")
+          .select("id, status, created_at, logo_url")
           .eq("user_id", session.user.id)
           .order("created_at", { ascending: false });
 
@@ -435,6 +436,10 @@ export default function DashboardPage() {
         }
 
         const latestRegistration = registrations[0];
+        // Set the logo URL if it exists
+        if (latestRegistration.logo_url) {
+          setUserLogo(latestRegistration.logo_url);
+        }
 
         // Check subscription
         const { data: subscription } = await supabase
@@ -900,40 +905,60 @@ export default function DashboardPage() {
             priority
             className="h-auto"
           />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="flex items-center gap-2">
-                <UserCircle className="h-5 w-5" />
-                My Account
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem
-                onClick={() => router.push("/profile")}
-                className="flex items-center gap-2"
-              >
-                <UserCircle className="h-4 w-4" />
-                Profile
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={handleBillingClick}
-                className="flex items-center gap-2"
-              >
-                <CreditCard className="h-4 w-4" />
-                Billing
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={async () => {
-                  await supabase.auth.signOut();
-                  router.push("/sign-in");
-                }}
-                className="text-red-600 flex items-center gap-2"
-              >
-                <LogOut className="h-4 w-4" />
-                Logout
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <div className="flex items-center gap-4">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                {userLogo ? (
+                  <div className="flex flex-col items-center cursor-pointer hover:opacity-90">
+                    <div className="h-[30px] w-[120px] overflow-hidden border border-gray-200 rounded flex items-center justify-center bg-white">
+                      <Image
+                        src={userLogo}
+                        alt="Organization Logo"
+                        width={120}
+                        height={30}
+                        className="max-h-[30px] w-auto"
+                        style={{ objectFit: "contain" }}
+                      />
+                    </div>
+                    <span className="text-xs text-muted-foreground mt-1">
+                      My Account
+                    </span>
+                  </div>
+                ) : (
+                  <Button variant="ghost" className="flex items-center gap-2">
+                    <UserCircle className="h-5 w-5" />
+                    My Account
+                  </Button>
+                )}
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem
+                  onClick={() => router.push("/profile")}
+                  className="flex items-center gap-2"
+                >
+                  <UserCircle className="h-4 w-4" />
+                  Profile
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={handleBillingClick}
+                  className="flex items-center gap-2"
+                >
+                  <CreditCard className="h-4 w-4" />
+                  Billing
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={async () => {
+                    await supabase.auth.signOut();
+                    router.push("/sign-in");
+                  }}
+                  className="text-red-600 flex items-center gap-2"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
 
         {/* Stats Section */}
