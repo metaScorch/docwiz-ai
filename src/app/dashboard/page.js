@@ -58,6 +58,11 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { PaymentStatusModal } from "@/components/PaymentStatusModal";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
 
 // Status filter definitions
 const STATUS_FILTERS = [
@@ -855,6 +860,21 @@ export default function DashboardPage() {
     window.history.replaceState({}, "", "/dashboard");
   };
 
+  // Add this helper function to format signer status
+  const getSignerStatusDetails = (signingTracking) => {
+    if (!signingTracking || !Array.isArray(signingTracking)) return [];
+
+    return signingTracking
+      .map((event) => ({
+        name: event.signer?.name || "Unknown",
+        email: event.signer?.email || "No email",
+        status: event.event_type?.replace("document_", "") || "unknown",
+        timestamp: event.timestamp,
+        details: event.event_data?.error_message || null,
+      }))
+      .reverse(); // Most recent first
+  };
+
   if (!isInitialized) {
     return (
       <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
@@ -1240,27 +1260,82 @@ export default function DashboardPage() {
                       {doc.template?.template_name || "Custom Document"}
                     </TableCell>
                     <TableCell>
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium whitespace-nowrap ${
-                          doc.status === "draft"
-                            ? "bg-yellow-100 text-yellow-800 border border-yellow-200"
-                            : doc.status === "completed" ||
-                                doc.status === "signed"
-                              ? "bg-green-100 text-green-800 border border-green-200"
-                              : doc.status === "pending_signature"
-                                ? "bg-blue-100 text-blue-800 border border-blue-200"
-                                : "bg-gray-100 text-gray-800 border border-gray-200"
-                        }`}
-                      >
-                        {doc.status === "pending_signature"
-                          ? "Pending Signature"
-                          : doc.status === "draft"
-                            ? "Draft"
-                            : doc.status === "completed" ||
-                                doc.status === "signed"
-                              ? "Completed"
-                              : doc.status}
-                      </span>
+                      <HoverCard>
+                        <HoverCardTrigger>
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium whitespace-nowrap ${
+                              doc.status === "draft"
+                                ? "bg-yellow-100 text-yellow-800 border border-yellow-200"
+                                : doc.status === "completed" ||
+                                    doc.status === "signed"
+                                  ? "bg-green-100 text-green-800 border border-green-200"
+                                  : doc.status === "pending_signature"
+                                    ? "bg-blue-100 text-blue-800 border border-blue-200"
+                                    : "bg-gray-100 text-gray-800 border border-gray-200"
+                            }`}
+                          >
+                            {doc.status === "pending_signature"
+                              ? "Pending Signature"
+                              : doc.status === "draft"
+                                ? "Draft"
+                                : doc.status === "completed" ||
+                                    doc.status === "signed"
+                                  ? "Completed"
+                                  : doc.status}
+                          </span>
+                        </HoverCardTrigger>
+                        {(doc.status === "pending_signature" ||
+                          doc.status === "completed" ||
+                          doc.status === "signed") && (
+                          <HoverCardContent className="w-80">
+                            <div className="space-y-2">
+                              <h4 className="text-sm font-semibold">
+                                Signing Status
+                              </h4>
+                              <div className="text-sm space-y-2">
+                                {getSignerStatusDetails(
+                                  doc.signing_tracking
+                                ).map((signer, idx) => (
+                                  <div
+                                    key={idx}
+                                    className="flex flex-col space-y-1 border-b last:border-0 pb-2"
+                                  >
+                                    <div className="flex justify-between">
+                                      <span className="font-medium">
+                                        {signer.name}
+                                      </span>
+                                      <span className="text-xs text-muted-foreground">
+                                        {formatRelativeTime(signer.timestamp)}
+                                      </span>
+                                    </div>
+                                    <span className="text-xs text-muted-foreground">
+                                      {signer.email}
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                      <span
+                                        className={`capitalize text-xs ${
+                                          signer.status === "bounced"
+                                            ? "text-red-600"
+                                            : signer.status === "signed"
+                                              ? "text-green-600"
+                                              : "text-blue-600"
+                                        }`}
+                                      >
+                                        {signer.status}
+                                      </span>
+                                      {signer.details && (
+                                        <span className="text-xs text-red-600">
+                                          ({signer.details})
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </HoverCardContent>
+                        )}
+                      </HoverCard>
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-col">
